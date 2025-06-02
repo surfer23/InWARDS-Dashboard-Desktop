@@ -16,6 +16,8 @@ import LimitsTable from '@/components/WQHealthDashboard/LimitsTable.vue'
 import AdminDashboard from '@/components/AdminDashboard/Dashboard.vue'
 import UserSupport from '@/components/UserSupport/Dashboard.vue'
 import LoadDashboard from '@/components/LoadDashboard/Dashboard.vue'
+import DamDashboard from '@/components/DamDashboard/Dashboard.vue'
+
 Vue.use(Router)
 
 export default new Router({
@@ -101,6 +103,11 @@ export default new Router({
       path: '/user-support',
       name: 'user-support-page',
       component: UserSupport
+    },
+    {
+      path: '/dam-dashboard',
+      name: 'dam-dashboard-page',
+      component: DamDashboard
     },
     {
       path: '*',

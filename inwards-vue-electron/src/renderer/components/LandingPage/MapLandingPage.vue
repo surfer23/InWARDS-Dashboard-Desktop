@@ -99,6 +99,23 @@
                       ></i>
                     </button>
                     <button
+                      id="damDash"
+                      class="btn inwards_button btn-labeled text-left"
+                      style="width: 100%"
+                      @click="navDam()"
+                      type="button"
+                    >
+                      <span class="btn-label"
+                        ><i
+                          class="fa fa-pie-chart"
+                          aria-hidden="true"
+                        ></i></span
+                      >Dam Dashboard<i
+                        class="fa fa-chevron-right vertical-center"
+                        style="padding-left: 10px; float: right"
+                      ></i>
+                    </button>
+                    <button
                       id="wqDash"
                       class="btn inwards_button btn-labeled text-left"
                       style="width: 100%"
@@ -971,6 +988,15 @@ export default {
       stateStore.setState(stateStore.keys.selectedWMAs, _selectedWMA)
       router.push({ path: 'dashboard' })
     },
+    navDam() {
+      let self = this
+      let _selectedWMA = []
+      for (let id in self.selectedFeatures) {
+        _selectedWMA.push(self.selectedFeatures[id].get('wma'))
+      }
+      stateStore.setState(stateStore.keys.selectedWMAs, _selectedWMA)
+      router.push({ path: 'dam-dashboard' })
+    },
     goToUserDefinedDashboard() {
       let self = this
       let _selectedWMA = []
@@ -1029,18 +1055,48 @@ export default {
       router.push({ path: 'invert-dashboard' })
     },
     goToEbaDashboard() {
+      let self = this
+      let _selectedWMA = []
+      for (let id in self.selectedFeatures) {
+        _selectedWMA.push(self.selectedFeatures[id].get('wma'))
+      }
+      stateStore.setState(stateStore.keys.selectedWMAs, _selectedWMA)
       router.push({ path: 'eba-dashboard' })
     },
     goToHealthDashboard() {
+      let self = this
+      let _selectedWMA = []
+      for (let id in self.selectedFeatures) {
+        _selectedWMA.push(self.selectedFeatures[id].get('wma'))
+      }
+      stateStore.setState(stateStore.keys.selectedWMAs, _selectedWMA)
       router.push({ path: 'wq-health-dashboard' })
     },
     goToLoadDashboard() {
+      let self = this
+      let _selectedWMA = []
+      for (let id in self.selectedFeatures) {
+        _selectedWMA.push(self.selectedFeatures[id].get('wma'))
+      }
+      stateStore.setState(stateStore.keys.selectedWMAs, _selectedWMA)
       router.push({ path: 'load-dashboard' })
     },
     goHome() {
+      let self = this
+      let _selectedWMA = []
+      for (let id in self.selectedFeatures) {
+        _selectedWMA.push(self.selectedFeatures[id].get('wma'))
+      }
+      stateStore.setState(stateStore.keys.selectedWMAs, _selectedWMA)
       router.push({ path: '/' })
     },
     goAdminDash() {
+      let self = this
+      let _selectedWMA = []
+      for (let id in self.selectedFeatures) {
+        _selectedWMA.push(self.selectedFeatures[id].get('wma'))
+      }
+      stateStore.setState(stateStore.keys.selectedWMAs, _selectedWMA)
       router.push({ path: 'admin-dashboard' })
     },
     resetApplicationData(e) {

@@ -16,7 +16,7 @@ const SELECTED_RQIS_SITES = 'selectedRQISSites';
 const SELECTED_IUCMA_STATIONS = 'selectedIUCMAstations';
 const SELECTED_IUCMA_SITES = 'selectedIUCMASites';
 const SELECTED_HEALTH_SITES = 'selectedHealthSites';
-
+const SELECTED_DAM_SITES = 'selectedDamSites';
 const DATE_START = 'dateStart';
 const LOGIN_STATUS = 'loginStatus';
 const DATE_END = 'dateEnd';
@@ -24,6 +24,7 @@ const stateStore = {
   debug: true,
   keys: {
     selectedCatchments: SELECTED_CATCHMENTS,
+    selectedDamSites: SELECTED_DAM_SITES,
     selectedWMAs: SELECTED_WMAS,
     selectedCharts: SELECTED_CHARTS,
     timestamp: TIMESTAMP,
@@ -59,6 +60,7 @@ const stateStore = {
     SELECTED_RQIS_STATIONS,
     SELECTED_RQIS_SITES,
     SELECTED_HEALTH_SITES,
+    SELECTED_DAM_SITES,
     TIMESTAMP
   ],
   state: {},
