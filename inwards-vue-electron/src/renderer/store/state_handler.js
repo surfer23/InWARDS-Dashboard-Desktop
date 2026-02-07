@@ -1,4 +1,4 @@
-import db from '../datastore';
+import db, { ensureReady } from '../datastore';
 import axios from 'axios';
 
 const SELECTED_CATCHMENTS = 'selectedCatchments';
@@ -75,6 +75,10 @@ const stateStore = {
     this.state[key] = newValue;
     console.log(newValue);
     this.state[TIMESTAMP] = Date.now();
+
+    // Ensure datastore is ready before writing
+    await ensureReady();
+
     return new Promise(resolve => {
       db.update({ type: 'user_states' }, {
         $set: self.state
@@ -84,36 +88,46 @@ const stateStore = {
         console.log(err, docs);
         if (uploadToServer) {
           self.uploadToServer(() => resolve('Resolved'));
+        } else {
+          resolve('Resolved');
         }
       });
     });
   },
-  getState(key, callback) {
+  async getState(key, callback) {
     const self = this;
     this.print(`Get state for ${key}`);
     if (this.state.hasOwnProperty(key)) {
       callback(this.state[key]);
     } else {
+      // Ensure datastore is ready before reading
+      await ensureReady();
+
       db.find({ type: 'user_states' }, function (err, docs) {
         if (typeof docs === 'undefined') {
+          callback(null);
           return false;
         }
         if (err) {
           self.print(err);
+          callback(null);
           return false;
         }
         if (docs.length === 0) {
           callback(null);
+          return;
         }
         try {
           let jsonData = JSON.stringify(docs[0]);
           if (!jsonData) {
+            callback(null);
             return;
           }
           self.state = JSON.parse(jsonData.replace(/'/g, ''));
           callback(self.state[key]);
         } catch (err) {
           console.log(err);
+          callback(null);
         }
       });
     }
@@ -125,8 +139,10 @@ const stateStore = {
       this.setState(key, null);
     }
   },
-  clearAll() {
+  async clearAll() {
     let self = this;
+    // Ensure datastore is ready before clearing
+    await ensureReady();
     // Removing all documents with the 'match-all' query
     db.remove({}, { multi: true }, function (err, numRemoved) {
       console.log(err, numRemoved);

@@ -37,7 +37,7 @@ let startDate = `${hydrologicalStartDate.getFullYear()}-${String(hydrologicalSta
 let endDate = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(currentDate.getDate()).padStart(2, '0')}`;
 
 //console.log('https://inwards.award.org.za/app_json/iucma_unverified_compliance.php?sd=' + startDate + '&ed=' + endDate);
-this.$http.get('https://inwards.award.org.za/app_json/iucma_compliance.php?sd=' + startDate + '&ed=' + endDate)
+this.$axios.get('https://inwards.award.org.za/app_json/iucma_compliance.php?sd=' + startDate + '&ed=' + endDate)
   .then(
     response => {
       this.dws = response.data;
@@ -55,7 +55,7 @@ updateTable () {
   let startDate = new Date(dateStartString);
   let endDate = new Date(dateEndString);
   // console.log('http://inwards.award.org.za/app_json/iucma_compliance.php?sd=' + this.formatDate(startDate) + '&ed=' + this.formatDate(endDate));
-  this.$http.get('https://inwards.award.org.za/app_json/iucma_compliance.php?sd=' + this.formatDate(startDate) + '&ed=' + this.formatDate(endDate))
+  this.$axios.get('https://inwards.award.org.za/app_json/iucma_compliance.php?sd=' + this.formatDate(startDate) + '&ed=' + this.formatDate(endDate))
     .then(
       response => {
         this.dws = response.data;

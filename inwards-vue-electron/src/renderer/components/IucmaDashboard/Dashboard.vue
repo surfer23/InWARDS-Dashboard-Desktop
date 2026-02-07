@@ -4,7 +4,13 @@
     <div class="container-fluid" style="height: 100%;">
       <div class="row no-gutters" style="height: 100%;">
         <div class="col-md-4 no-float left-panel" style="background: #252526; margin-top: 5px; padding-bottom: 50px; margin-right: 0px;">
-          <MapDashboard ref="mapDashboard"/>
+          <!-- Using BaseMapDashboard with unique mapId -->
+          <BaseMapDashboard
+            ref="mapDashboard"
+            map-id="iucma-dashboard-map"
+            map-height="410px"
+            :connected-to-tree="false"
+          />
           <hr>
           <div class="card rounded-0">
            <div class="card-header inwards_card rounded-0"><h6 style="color: white;"><i class="fa fa-tasks" style="padding-right: 10px;"></i>Select Chart Components</h6></div>
@@ -301,7 +307,8 @@ nav > div a.nav-item.nav-link:focus {
 <script>
   import axios from 'axios';
   import NavButtons from '../../components/NavButtons';
-  import MapDashboard from './MapDashboard';
+  // Import base component instead of local one
+  import BaseMapDashboard from '../shared/BaseMapDashboard.vue';
   import ComplianceTable from './ComplianceTable';
   import VerifyDischarge from './VerifyDischarge';
   import ManageVerifications from './ManageVerifications';
@@ -331,9 +338,9 @@ nav > div a.nav-item.nav-link:focus {
   import GeoJSON from 'ol/format/GeoJSON';
   import $ from 'jquery';
   import {Fill, Stroke, Style} from 'ol/style';
-  import path from 'path';
+  import { remote } from '../../services/electron-compat';
   require('promise.prototype.finally').shim();
-  const { app } = require('electron').remote;
+  const { app } = remote;
   import Docxtemplater from "docxtemplater";
   import PizZip from "pizzip";
   import PizZipUtils from "pizzip/utils/index.js";
@@ -342,9 +349,10 @@ nav > div a.nav-item.nav-link:focus {
     PizZipUtils.getBinaryContent(url, callback);
   }
   export default {
+    name: 'IucmaDashboard',
 
     components: {
-      MapDashboard,
+      BaseMapDashboard,
       NavButtons,
       ComplianceTable,
       UnverifiedCompliance,
@@ -381,11 +389,16 @@ nav > div a.nav-item.nav-link:focus {
         selectedWMAs: []
       };
     },
+
+    computed: {
+      mapDashboardRef() {
+        return this.$refs.mapDashboard;
+      }
+    },
+
     mounted () {
-      let self = this;
-      this.mapDashboardRef = this.$refs.mapDashboard;
-      let map = this.$refs.mapDashboard.map;
-      this.mapDashboardRef.connectedToTree = false;
+      const self = this;
+      const map = this.$refs.mapDashboard.getMap();
       let currentDate = new Date();
       let year = currentDate.getFullYear();
       let hydrologicalStartDate = new Date(`${year}-10-01`);
@@ -432,15 +445,14 @@ nav > div a.nav-item.nav-link:focus {
       self.fetchStations();
     },
     methods: {
-      fetchStations () {
+      async fetchStations () {
         let self = this;
         let wmaNames = ['inkomati_usuthu'];
-        let fs = require('fs');
-        let dir = path.join(app.getPath('userData'), '/stations');
-        // TODO : Create an util class for file storage
-        if (!fs.existsSync(dir)) {
-          fs.mkdirSync(dir);
-        }
+
+        // Get userData path via IPC
+        const userDataPath = await window.electronAPI.getUserDataPath();
+        const stationsDir = `${userDataPath}/stations`;
+
         // Cancel previous request if any
         if (this.stationsRequest) {
           this.stationsRequest.cancel('Canceling stations request');
@@ -452,24 +464,42 @@ nav > div a.nav-item.nav-link:focus {
           wmaNames[i] = `'${wmaNames[i]}'`;
         }
         let url = `${self.stationsApi}?wma=${wmaNames.join()}`;
-        let stationFile = `${dir}/${url.hashCode()}.json`;
+
+        // Generate a simple hash for the filename
+        const urlHash = url.split('').reduce((a, b) => { a = ((a << 5) - a) + b.charCodeAt(0); return a & a }, 0);
+        let stationFile = `${stationsDir}/${Math.abs(urlHash)}.json`;
+
         // Check if online
         if (navigator.onLine) {
           let cancelToken = null;
           if (self.stationsRequest) {
             cancelToken = self.stationsRequest.token;
           }
-          axios.get(url, { cancelToken: cancelToken }).then(response => {
+          axios.get(url, { cancelToken: cancelToken }).then(async response => {
             self.mapDashboardRef.loadStationsToMap(response.data);
-            //self.createCatchmentTree(response.data);
+            // Cache the data
+            try {
+              const jsonData = JSON.stringify(response.data);
+              const buffer = new TextEncoder().encode(jsonData);
+              await window.electronAPI.writeFile(stationFile, buffer);
+            } catch (err) {
+              console.warn('Could not cache stations data:', err);
+            }
           }).catch(error => {
             console.log(error);
           });
         } else {
-          if (fs.existsSync(stationFile)) {
-            let jsonData = fs.readFileSync(stationFile, 'utf-8');
-            let stationsData = JSON.parse(jsonData);
-            self.mapDashboardRef.loadStationsToMap(stationsData);
+          // Try to load from cache
+          try {
+            const exists = await window.electronAPI.fileExists(stationFile);
+            if (exists) {
+              const buffer = await window.electronAPI.readFile(stationFile);
+              const jsonData = new TextDecoder().decode(buffer);
+              let stationsData = JSON.parse(jsonData);
+              self.mapDashboardRef.loadStationsToMap(stationsData);
+            }
+          } catch (err) {
+            console.warn('Could not load cached stations:', err);
           }
         }
       },

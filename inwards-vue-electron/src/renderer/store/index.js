@@ -1,17 +1,38 @@
-import Vue from 'vue';
-import Vuex from 'vuex';
+import { defineStore } from 'pinia';
 
-import { createPersistedState, createSharedMutations } from 'vuex-electron';
+// Pinia store replacing Vuex Counter module
+export const useCounterStore = defineStore('counter', {
+  state: () => ({
+    main: 0
+  }),
 
-import modules from './modules';
+  actions: {
+    decrementMainCounter() {
+      this.main--;
+    },
+    incrementMainCounter() {
+      this.main++;
+    },
+    someAsyncTask() {
+      // do something async
+      this.incrementMainCounter();
+    }
+  },
 
-Vue.use(Vuex);
-
-export default new Vuex.Store({
-  modules,
-  plugins: [
-    createPersistedState(),
-    createSharedMutations()
-  ],
-  strict: process.env.NODE_ENV !== 'production'
+  // Persist state to localStorage (replaces vuex-electron persistence)
+  persist: true
 });
+
+// Helper to restore state from localStorage on app init
+export function initStoreFromStorage() {
+  const STORAGE_KEY = 'pinia-state';
+  try {
+    const savedState = localStorage.getItem(STORAGE_KEY);
+    if (savedState) {
+      return JSON.parse(savedState);
+    }
+  } catch (e) {
+    console.warn('Failed to restore persisted state:', e);
+  }
+  return null;
+}

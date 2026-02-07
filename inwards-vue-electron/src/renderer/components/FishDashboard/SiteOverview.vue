@@ -3,49 +3,51 @@
     <div class="card-header inwards_card"><img src="../../assets/fbis_icon.png" height="11"> FBIS Site Overview</div>
     <div class="card-body chart-container">
           <table v-for="log in logs" v-bind:key="log.site_code" style="font-size: 0.75rem;" class="table">
+                   <tbody>
                    <tr>
                     <th> River Name</th>
                     <td>{{ log.river_name }}</td>
                    </tr>
-                    <tr> 
+                    <tr>
                     <th> Quaternary Catchment</th>
                     <td>{{ log.quaternary_catchment_area }}</td>
                     </tr>
-                    <tr> 
+                    <tr>
                     <th> Site Code</th>
                     <td>{{ log.site_code }}</td>
                     </tr>
-                    <tr> 
+                    <tr>
                     <th> Site Description</th>
                     <td>{{ log.site_description }}</td>
                     </tr>
-                    <tr> 
+                    <tr>
                     <th> Protected Area</th>
-                    <td>{{ log.national_protected_area }}</td>        
+                    <td>{{ log.national_protected_area }}</td>
                     </tr>
-                    <tr> 
+                    <tr>
                     <th> Ecosystem Threat Status</th>
-                    <td>{{ log.ecosystem_threat_status }}</td> 
+                    <td>{{ log.ecosystem_threat_status }}</td>
                     </tr>
-                    <tr> 
+                    <tr>
                     <th> SWA Surface</th>
-                    <td>{{ log.strategic_water_source_areas_surface }}</td> 
+                    <td>{{ log.strategic_water_source_areas_surface }}</td>
                     </tr>
-                    <tr> 
+                    <tr>
                     <th> SWA Ground</th>
                     <td>{{ log.strategic_water_source_areas_ground }}</td>
                     </tr>
-                    <tr> 
+                    <tr>
                     <th> PES 2018</th>
                     <td>{{ log.present_ecological_state_2018 }}</td>
                     </tr>
-                    <tr> 
+                    <tr>
                     <th> National Critical Biodiversity</th>
-                    <td>{{ log.national_critical_biodiversity }}</td>       
+                    <td>{{ log.national_critical_biodiversity }}</td>
                     </tr>
-                     <tr style="width: 100%; margin: 0 auto;"> 
+                     <tr style="width: 100%; margin: 0 auto;">
                      <td style="width: 100%; margin: 0 auto;" colspan="2"> <button class="btn inwards_button" type="button" style="width: 100%; margin: 0; font-size: 11px" v-on:click="redirectFbis(log.site_code)">View Site on FBIS</button></td>
                     </tr>
+                   </tbody>
 		</table> 
     </div>
   </div>
@@ -69,7 +71,7 @@ export default {
   methods: {
     siteTable (site) {
       // console.log('http://inwards.award.org.za/app_json/fish_site.php?site=' + site);
-      this.$http.get('https://inwards.award.org.za/app_json/fish_site.php?site=' + site)
+      this.$axios.get('https://inwards.award.org.za/app_json/fish_site.php?site=' + site)
         .then(
           response => {
             this.logs = response.data;

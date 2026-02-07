@@ -31,9 +31,8 @@
 <script>
   import $ from 'jquery';
   import stateStore from '../store/state_handler';
-  import {rawQuery, dbFilePath, dbUrl, isDbExist} from '../sqlite/index';
-  const request = require('request');
-  const fs = require('fs');
+  import {rawQuery, getDatabasePath, dbUrl, isDbExist, initDatabase} from '../sqlite/index';
+  // Note: 'request' and 'fs' are no longer used directly - we use electronAPI.downloadDatabase
   export default {
     data () {
       return {
@@ -57,7 +56,7 @@
               });
               this.checkDatabaseInLocal();
             } else {
-              self.$bus.$emit('databaseValidated');
+              self.$bus.emit('databaseValidated');
             }
           }
         );
@@ -77,13 +76,21 @@
       },
       checkDatabaseInLocal () {
         let self = this;
-        var promise = new Promise(function (resolve, reject) {
-          setTimeout(() => {
-            if (isDbExist()) {
-              resolve('Database exist');
-              self.testDatabase();
-            } else {
-              reject(Error('Database does not exist in local'));
+        var promise = new Promise(async function (resolve, reject) {
+          setTimeout(async () => {
+            try {
+              // isDbExist is now async
+              const exists = await isDbExist();
+              if (exists) {
+                resolve('Database exist');
+                self.initAndTestDatabase();
+              } else {
+                reject(Error('Database does not exist in local'));
+                self.fetchDatabase();
+              }
+            } catch (err) {
+              console.error('Error checking database:', err);
+              reject(err);
               self.fetchDatabase();
             }
           }, 1000);
@@ -92,23 +99,35 @@
       },
       fetchDatabase () {
         let self = this;
-        var promise = new Promise(function (resolve, reject) {
-          var req = request({
-            method: 'GET',
-            uri: dbUrl
-          });
-          let out = fs.createWriteStream(dbFilePath);
-          req.pipe(out);
-          req.on('error', function (err) {
+        var promise = new Promise(async function (resolve, reject) {
+          try {
+            // Use the IPC-based download instead of deprecated 'request' module
+            const destPath = await getDatabasePath();
+            await window.electronAPI.downloadDatabase(dbUrl, destPath);
+            resolve();
+            self.initAndTestDatabase();
+          } catch (err) {
             console.error(err);
             reject(Error('Could not get a database from remote'));
-          });
-          req.on('end', function () {
-            resolve();
-            self.testDatabase();
-          });
+          }
         });
         this.addStatus('Fetching database from remote...', promise);
+      },
+      initAndTestDatabase () {
+        let self = this;
+        var promise = new Promise(async function (resolve, reject) {
+          try {
+            // Initialize sql.js database first
+            await initDatabase();
+            console.log('Database initialized successfully');
+            resolve('Database initialized');
+            self.testDatabase();
+          } catch (err) {
+            console.error('Failed to initialize database:', err);
+            reject(Error('Failed to initialize database'));
+          }
+        });
+        this.addStatus('Initializing database...', promise);
       },
       testDatabase () {
         let self = this;
@@ -127,7 +146,7 @@
               }, false);
               setTimeout(() => {
                 $('#loader-modal').modal('hide');
-                self.$bus.$emit('databaseValidated');
+                self.$bus.emit('databaseValidated');
               }, 500);
             });
           }, 1000);

@@ -341,13 +341,9 @@
 </template>
 
 <script lang="ts">
-import Vue from 'vue'
-
-enum TEST {}
-
-export default Vue.extend({
+export default {
   name: 'Dashboard',
-})
+}
 </script>
 
 <style>

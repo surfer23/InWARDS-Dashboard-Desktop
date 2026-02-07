@@ -21,6 +21,7 @@
                             <td>Ammonium</td>
                     </tr>
             </thead>
+            <tbody>
             <tr>
                     <td>Conc water mg/l</td>
                     <td></td>
@@ -217,6 +218,7 @@
                     <td><RouterLink class="btn btn-secondary btn-lg active" to="naratives-dashboard"> <i class="fa fa-info"></i><span></span></RouterLink></td>
                     <td><RouterLink class="btn btn-secondary btn-lg active" to="naratives-dashboard"> <i class="fa fa-info"></i><span></span></RouterLink></td>
             </tr>
+            </tbody>
     </table>
                 <NarativeTable ref="narativeComponent" style="margin-top: 5px;"/>
             </div>

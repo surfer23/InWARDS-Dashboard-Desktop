@@ -64,7 +64,7 @@
     },
     methods: {
       showLogModal () {
-        this.$http.get('https://inwards.award.org.za/app_json/knp_log.php')
+        this.$axios.get('https://inwards.award.org.za/app_json/knp_log.php')
           .then(
             response => {
               this.logs = response.data;

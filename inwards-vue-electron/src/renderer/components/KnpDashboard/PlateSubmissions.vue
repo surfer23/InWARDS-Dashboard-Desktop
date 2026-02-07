@@ -51,7 +51,7 @@
       },
       methods: {
         showPlatesForm () {
-          this.$http.get('https://inwards.award.org.za/app_json/data_upload/plate_submissions.php')
+          this.$axios.get('https://inwards.award.org.za/app_json/data_upload/plate_submissions.php')
             .then(
               response => {
                 this.logs = response.data;

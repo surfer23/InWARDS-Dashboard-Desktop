@@ -44,7 +44,7 @@
       },
       refreshStations () {
         this.loading = true;
-        this.$bus.$emit('refreshStations');
+        this.$bus.emit('refreshStations');
       },
       toggleNode (node, selected) {
         let nodeBehaviour = selected ? 'select_node' : 'deselect_node';

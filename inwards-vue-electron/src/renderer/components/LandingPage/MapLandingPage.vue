@@ -1,493 +1,403 @@
 <template>
-  <div style="width: 100%; height: 100%; margin: 0; padding: 0">
+  <div :class="['landing-page', themeClass]">
     <StatusBar />
     <Header />
+
+    <!-- Map Popups (OL overlays) -->
     <div id="popup" class="ol-popup">
       <a href="#" id="popup-closer" class="ol-popup-closer"></a>
       <div id="popup-content" class="ol-popup-content"></div>
     </div>
-    <div id="overlay">
-      <div class="row" style="height: 100%">
-        <div class="col-md-12">
-          <div class="card rounded-0">
-            <div class="card-header inwards_card">
-              <h6 style="color: white">
-                <i class="fa fa-map" style="padding-right: 10px"></i>Your
-                selected WMAs
-              </h6>
+    <div id="tooltip" class="ol-tooltip">
+      <div id="tooltip-content"></div>
+    </div>
+
+    <!-- Main Layout -->
+    <div class="main-container">
+      <!-- Map Section -->
+      <div class="map-section">
+        <div id="map" class="map-container"></div>
+
+        <!-- WMA Selection Overlay -->
+        <div class="ft-glass wma-card">
+          <div class="ft-glass-header">
+            <i class="fa fa-map-o"></i>
+            <span>Water Management Areas</span>
+          </div>
+          <div class="wma-list">
+            <label class="wma-item">
+              <input id="limpopo" type="checkbox" />
+              <span class="wma-checkbox"></span>
+              <span class="wma-label">Limpopo</span>
+            </label>
+            <label class="wma-item">
+              <input id="olifants_letaba" type="checkbox" />
+              <span class="wma-checkbox"></span>
+              <span class="wma-label">Olifants-Letaba</span>
+            </label>
+            <label class="wma-item">
+              <input id="inkomati_usuthu" type="checkbox" />
+              <span class="wma-checkbox"></span>
+              <span class="wma-label">Inkomati-Usuthu</span>
+            </label>
+          </div>
+          <div class="wma-count" v-if="selectedWMACount > 0">
+            <span class="count-badge">{{ selectedWMACount }}</span>
+            area{{ selectedWMACount !== 1 ? 's' : '' }} selected
+          </div>
+        </div>
+
+        <!-- Flow Legend Overlay -->
+        <div class="ft-glass legend-card">
+          <div class="ft-glass-header">
+            <i class="fa fa-tint"></i>
+            <span>Flow Status</span>
+          </div>
+          <div class="legend-items">
+            <div class="legend-row">
+              <span class="legend-dot" style="background: #0033cc"></span>
+              <span>High</span>
             </div>
-            <div class="card-body">
-              <div
-                class="row justify-content-md-center"
-                style="margin-top: 5px; margin-bottom: 5px"
+            <div class="legend-row">
+              <span class="legend-dot" style="background: #3399ff"></span>
+              <span>Moderately High</span>
+            </div>
+            <div class="legend-row">
+              <span class="legend-dot" style="background: #99cc33"></span>
+              <span>Normal</span>
+            </div>
+            <div class="legend-row">
+              <span class="legend-dot" style="background: #ffff00; border-color: #ccc"></span>
+              <span>Moderately Low</span>
+            </div>
+            <div class="legend-row">
+              <span class="legend-dot" style="background: #ffcc00"></span>
+              <span>Low</span>
+            </div>
+            <div class="legend-row">
+              <span class="legend-dot" style="background: #ff0000"></span>
+              <span>Very Low</span>
+            </div>
+            <div class="legend-row">
+              <span class="legend-dot" style="background: #000000"></span>
+              <span>None</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Admin Controls -->
+        <div class="admin-controls">
+          <button
+            id="reset"
+            style="display: none"
+            class="btn admin-btn"
+            @click="resetApplicationData"
+          >
+            <i class="fa fa-refresh"></i> Reset
+          </button>
+          <button
+            id="adminDash"
+            style="display: none"
+            class="btn admin-btn"
+            @click="goAdminDash"
+          >
+            <i class="fa fa-cog"></i> Admin
+          </button>
+        </div>
+      </div>
+
+      <!-- Dashboard Panel -->
+      <div class="dashboard-panel">
+        <!-- Panel Header -->
+        <div class="panel-header">
+          <div class="panel-title-area">
+            <h1 class="panel-title">INWARDS</h1>
+            <span class="panel-subtitle">Integrated Water Resources Decision Support</span>
+          </div>
+          <div class="panel-controls">
+            <div class="ft-status-badge" :class="{ online: isOnline }">
+              <span class="ft-status-dot"></span>
+              <span>{{ isOnline ? 'Online' : 'Offline' }}</span>
+            </div>
+            <button
+              class="ft-theme-toggle"
+              @click="toggleTheme"
+              :title="isDarkTheme ? 'Switch to light mode' : 'Switch to dark mode'"
+            >
+              <i :class="isDarkTheme ? 'fa fa-sun-o' : 'fa fa-moon-o'"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- Selection Prompt -->
+        <div class="selection-prompt" v-if="selectedWMACount === 0">
+          <i class="fa fa-map-marker prompt-icon"></i>
+          <span>Select a Water Management Area on the map to enable dashboards</span>
+        </div>
+
+        <!-- Scrollable Content -->
+        <div class="panel-content ft-scrollable">
+          <!-- Real-time Monitoring -->
+          <div class="card-category">
+            <div class="ft-category-divider">
+              <span class="ft-divider-line"></span>
+              <span class="ft-divider-label">Real-time Monitoring</span>
+              <span class="ft-divider-line"></span>
+            </div>
+            <div class="ft-card-grid">
+              <button
+                id="unverified"
+                class="ft-dash-card"
+                @click="saveSelection()"
+                :disabled="selectedWMACount === 0"
               >
-                <div class="col-md-12">
-                  <label class="custom-control wma-toggle custom-checkbox">
-                    <input
-                      id="limpopo"
-                      type="checkbox"
-                      class="custom-control-input"
-                    />Limpopo WMA
-                    <span
-                      class="custom-control-indicator"
-                      style="padding-left: 10px; float: right"
-                    ></span>
-                  </label>
+                <div class="ft-dash-card-icon realtime">
+                  <i class="fa fa-line-chart"></i>
                 </div>
-                <div class="col-md-12">
-                  <label class="custom-control wma-toggle custom-checkbox">
-                    <input
-                      id="olifants_letaba"
-                      type="checkbox"
-                      class="custom-control-input"
-                    />Olifants-Letaba WMA
-                    <span
-                      class="custom-control-indicator"
-                      style="padding-left: 10px; float: right"
-                    ></span>
-                  </label>
+                <div class="ft-dash-card-text">
+                  <h4>Real-time</h4>
+                  <p>Live stream flow</p>
                 </div>
-                <div class="col-md-12">
-                  <label class="custom-control wma-toggle custom-checkbox">
-                    <input
-                      id="inkomati_usuthu"
-                      type="checkbox"
-                      class="custom-control-input"
-                    />Inkomati-Usuthu WMA
-                    <span
-                      class="custom-control-indicator"
-                      style="padding-left: 10px; float: right"
-                    ></span>
-                  </label>
+                <i class="fa fa-chevron-right ft-dash-card-arrow"></i>
+              </button>
+              <button
+                id="damDash"
+                class="ft-dash-card"
+                @click="navDam()"
+                :disabled="selectedWMACount === 0"
+              >
+                <div class="ft-dash-card-icon dam">
+                  <i class="fa fa-pie-chart"></i>
                 </div>
-              </div>
-              <div class="row">
-                <div class="col-md-12">
-                  <div class="btn-group-vertical" style="width: 100%">
-                    <button
-                      id="home"
-                      class="btn inwards_button btn-labeled text-left"
-                      style="width: 100%; display: none"
-                      @click="goHome()"
-                      type="button"
-                    >
-                      <span class="btn-label"
-                        ><i
-                          class="fa fa-line-chart"
-                          aria-hidden="true"
-                        ></i></span
-                      >Home<i
-                        class="fa fa-chevron-right vertical-center"
-                        style="padding-left: 10px; float: right"
-                      ></i>
-                    </button>
-                    <button
-                      id="unverified"
-                      class="btn inwards_button btn-labeled text-left"
-                      style="width: 100%"
-                      @click="saveSelection()"
-                      type="button"
-                    >
-                      <span class="btn-label"
-                        ><i
-                          class="fa fa-line-chart"
-                          aria-hidden="true"
-                        ></i></span
-                      >Real-time Dashboard<i
-                        class="fa fa-chevron-right vertical-center"
-                        style="padding-left: 10px; float: right"
-                      ></i>
-                    </button>
-                    <button
-                      id="damDash"
-                      class="btn inwards_button btn-labeled text-left"
-                      style="width: 100%"
-                      @click="navDam()"
-                      type="button"
-                    >
-                      <span class="btn-label"
-                        ><i
-                          class="fa fa-pie-chart"
-                          aria-hidden="true"
-                        ></i></span
-                      >Dam Dashboard<i
-                        class="fa fa-chevron-right vertical-center"
-                        style="padding-left: 10px; float: right"
-                      ></i>
-                    </button>
-                    <button
-                      id="wqDash"
-                      class="btn inwards_button btn-labeled text-left"
-                      style="width: 100%"
-                      @click="goToWqDashboard()"
-                      type="button"
-                    >
-                      <span class="btn-label"
-                        ><i class="fa fa-flask" aria-hidden="true"></i></span
-                      >DWS WQ Dashboard<i
-                        class="fa fa-chevron-right vertical-center"
-                        style="padding-left: 10px; float: right"
-                      ></i>
-                    </button>
-                    <button
-                      id="healthDash"
-                      class="btn inwards_button btn-labeled text-left"
-                      style="width: 100%"
-                      @click="goToHealthDashboard()"
-                      type="button"
-                    >
-                      <span class="btn-label"
-                        ><i
-                          class="fa fa-heartbeat"
-                          aria-hidden="true"
-                        ></i></span
-                      >WQ Health Dashboard<i
-                        class="fa fa-chevron-right vertical-center"
-                        style="padding-left: 10px; float: right"
-                      ></i>
-                    </button>
-                    <button
-                      id="knpDash"
-                      class="btn inwards_button btn-labeled text-left"
-                      style="width: 100%"
-                      @click="goToKnpDashboard()"
-                      type="button"
-                    >
-                      <span class="btn-label"
-                        ><i class="fa fa-paw" aria-hidden="true"></i></span
-                      >KNP Dashboard<i
-                        class="fa fa-chevron-right vertical-center"
-                        style="padding-left: 10px; float: right"
-                      ></i>
-                    </button>
-                    <button
-                      id="iucmaDash"
-                      class="btn inwards_button btn-labeled text-left"
-                      style="width: 100%"
-                      @click="goToIUCMADashboard()"
-                      type="button"
-                    >
-                      <span class="btn-label"
-                        ><i
-                          class="fa fa-area-chart"
-                          aria-hidden="true"
-                        ></i></span
-                      >IUCMA EWR Dashboard<i
-                        class="fa fa-chevron-right vertical-center"
-                        style="padding-left: 10px; float: right"
-                      ></i>
-                    </button>
-                    <button
-                      id="iucmaDash"
-                      class="btn inwards_button btn-labeled text-left"
-                      style="width: 100%"
-                      @click="goToIUCMAWqDashboard()"
-                      type="button"
-                    >
-                      <span class="btn-label"
-                        ><i class="fa fa-bullseye" aria-hidden="true"></i></span
-                      >IUCMA RQO Dashboard<i
-                        class="fa fa-chevron-right vertical-center"
-                        style="padding-left: 10px; float: right"
-                      ></i>
-                    </button>
-                    <button
-                      id="loadDash"
-                      class="btn inwards_button btn-labeled text-left"
-                      style="width: 100%"
-                      @click="goToLoadDashboard()"
-                      type="button"
-                    >
-                      <span class="btn-label"
-                        ><i class="fa fa-bullseye" aria-hidden="true"></i></span
-                      >Licensing Load Dashboard<i
-                        class="fa fa-chevron-right vertical-center"
-                        style="padding-left: 10px; float: right"
-                      ></i>
-                    </button>
-                    <button
-                      id="verifiedDash"
-                      class="btn inwards_button text-left"
-                      style="width: 100%; display: none"
-                      type="button"
-                    >
-                      <span class="btn-label"
-                        ><i
-                          class="fa fa-line-chart"
-                          aria-hidden="true"
-                        ></i></span
-                      >Verified Dashboard<i
-                        class="fa fa-chevron-right vertical-center"
-                        style="padding-left: 10px; float: right"
-                      ></i>
-                    </button>
-                    <button
-                      id="fishDash"
-                      class="btn inwards_button btn-labeled text-left"
-                      style="width: 100%"
-                      @click="goToFishDashboard()"
-                      type="button"
-                    >
-                      <span class="btn-label"
-                        ><font-awesome-icon
-                          icon="fa-solid fa-fish-fins" /></span
-                      >Fish Dashboard<i
-                        class="fa fa-chevron-right vertical-center"
-                        style="padding-left: 10px; float: right"
-                      ></i>
-                    </button>
-                    <button
-                      id="invertDash"
-                      class="btn inwards_button btn-labeled text-left"
-                      style="width: 100%"
-                      @click="goToInvertDashboard()"
-                      type="button"
-                    >
-                      <span class="btn-label"
-                        ><font-awesome-icon icon="fa-solid fa-bug" /></span
-                      >Invert Dashboard<i
-                        class="fa fa-chevron-right vertical-center"
-                        style="padding-left: 10px; float: right"
-                      ></i>
-                    </button>
-                    <button
-                      id="ebaDash"
-                      class="btn inwards_button btn-labeled text-left"
-                      style="width: 100%"
-                      @click="goToEbaDashboard()"
-                      type="button"
-                    >
-                      <span class="btn-label"
-                        ><font-awesome-icon icon="fa-solid fa-map" /></span
-                      >Spatial Risk Dashboard<i
-                        class="fa fa-chevron-right vertical-center"
-                        style="padding-left: 10px; float: right"
-                      ></i>
-                    </button>
-                    <button
-                      id="userDash"
-                      class="btn inwards_button btn-labeled text-left"
-                      style="width: 100%"
-                      @click="goToUserDefinedDashboard()"
-                      type="button"
-                    >
-                      <span class="btn-label"
-                        ><i class="fa fa-user" aria-hidden="true"></i></span
-                      >User Dashboard<i
-                        class="fa fa-chevron-right vertical-center"
-                        style="padding-left: 10px; float: right"
-                      ></i>
-                    </button>
-                  </div>
+                <div class="ft-dash-card-text">
+                  <h4>Dam Levels</h4>
+                  <p>Storage & capacity</p>
                 </div>
-              </div>
+                <i class="fa fa-chevron-right ft-dash-card-arrow"></i>
+              </button>
+            </div>
+          </div>
+
+          <!-- Water Quality -->
+          <div class="card-category">
+            <div class="ft-category-divider">
+              <span class="ft-divider-line"></span>
+              <span class="ft-divider-label">Water Quality</span>
+              <span class="ft-divider-line"></span>
+            </div>
+            <div class="ft-card-grid">
+              <button
+                id="wqDash"
+                class="ft-dash-card"
+                @click="goToWqDashboard()"
+                :disabled="selectedWMACount === 0"
+              >
+                <div class="ft-dash-card-icon wq">
+                  <i class="fa fa-flask"></i>
+                </div>
+                <div class="ft-dash-card-text">
+                  <h4>DWS WQ</h4>
+                  <p>Water & Sanitation</p>
+                </div>
+                <i class="fa fa-chevron-right ft-dash-card-arrow"></i>
+              </button>
+              <button
+                id="healthDash"
+                class="ft-dash-card"
+                @click="goToHealthDashboard()"
+                :disabled="selectedWMACount === 0"
+              >
+                <div class="ft-dash-card-icon health">
+                  <i class="fa fa-heartbeat"></i>
+                </div>
+                <div class="ft-dash-card-text">
+                  <h4>WQ Health</h4>
+                  <p>Health indicators</p>
+                </div>
+                <i class="fa fa-chevron-right ft-dash-card-arrow"></i>
+              </button>
+            </div>
+          </div>
+
+          <!-- Biodiversity & Ecology -->
+          <div class="card-category">
+            <div class="ft-category-divider">
+              <span class="ft-divider-line"></span>
+              <span class="ft-divider-label">Biodiversity & Ecology</span>
+              <span class="ft-divider-line"></span>
+            </div>
+            <div class="ft-card-grid">
+              <button
+                id="knpDash"
+                class="ft-dash-card"
+                @click="goToKnpDashboard()"
+                :disabled="selectedWMACount === 0"
+              >
+                <div class="ft-dash-card-icon knp">
+                  <i class="fa fa-paw"></i>
+                </div>
+                <div class="ft-dash-card-text">
+                  <h4>KNP</h4>
+                  <p>Kruger Park</p>
+                </div>
+                <i class="fa fa-chevron-right ft-dash-card-arrow"></i>
+              </button>
+              <button
+                id="fishDash"
+                class="ft-dash-card"
+                @click="goToFishDashboard()"
+                :disabled="selectedWMACount === 0"
+              >
+                <div class="ft-dash-card-icon fish">
+                  <font-awesome-icon icon="fa-solid fa-fish-fins" />
+                </div>
+                <div class="ft-dash-card-text">
+                  <h4>Fish</h4>
+                  <p>Species monitoring</p>
+                </div>
+                <i class="fa fa-chevron-right ft-dash-card-arrow"></i>
+              </button>
+              <button
+                id="invertDash"
+                class="ft-dash-card"
+                @click="goToInvertDashboard()"
+                :disabled="selectedWMACount === 0"
+              >
+                <div class="ft-dash-card-icon invert">
+                  <font-awesome-icon icon="fa-solid fa-bug" />
+                </div>
+                <div class="ft-dash-card-text">
+                  <h4>Invertebrates</h4>
+                  <p>Bioassessment</p>
+                </div>
+                <i class="fa fa-chevron-right ft-dash-card-arrow"></i>
+              </button>
+              <button
+                id="fishtracDash"
+                class="ft-dash-card"
+                @click="goToFishtracDashboard()"
+              >
+                <div class="ft-dash-card-icon fishtrac">
+                  <i class="fa fa-podcast"></i>
+                </div>
+                <div class="ft-dash-card-text">
+                  <h4>Fishtrac</h4>
+                  <p>Tracking & telemetry</p>
+                </div>
+                <i class="fa fa-chevron-right ft-dash-card-arrow"></i>
+              </button>
+            </div>
+          </div>
+
+          <!-- Specialized Analysis -->
+          <div class="card-category">
+            <div class="ft-category-divider">
+              <span class="ft-divider-line"></span>
+              <span class="ft-divider-label">Specialized Analysis</span>
+              <span class="ft-divider-line"></span>
+            </div>
+            <div class="ft-card-grid">
+              <button
+                id="iucmaDash"
+                class="ft-dash-card"
+                @click="goToIUCMADashboard()"
+              >
+                <div class="ft-dash-card-icon iucma">
+                  <i class="fa fa-area-chart"></i>
+                </div>
+                <div class="ft-dash-card-text">
+                  <h4>IUCMA EWR</h4>
+                  <p>Environmental water</p>
+                </div>
+                <i class="fa fa-chevron-right ft-dash-card-arrow"></i>
+              </button>
+              <button
+                class="ft-dash-card"
+                @click="goToIUCMAWqDashboard()"
+              >
+                <div class="ft-dash-card-icon iucma-wq">
+                  <i class="fa fa-bullseye"></i>
+                </div>
+                <div class="ft-dash-card-text">
+                  <h4>IUCMA RQO</h4>
+                  <p>Quality objectives</p>
+                </div>
+                <i class="fa fa-chevron-right ft-dash-card-arrow"></i>
+              </button>
+              <button
+                id="loadDash"
+                class="ft-dash-card"
+                @click="goToLoadDashboard()"
+                :disabled="selectedWMACount === 0"
+              >
+                <div class="ft-dash-card-icon load">
+                  <i class="fa fa-balance-scale"></i>
+                </div>
+                <div class="ft-dash-card-text">
+                  <h4>Licensing</h4>
+                  <p>Water use analysis</p>
+                </div>
+                <i class="fa fa-chevron-right ft-dash-card-arrow"></i>
+              </button>
+              <button
+                id="ebaDash"
+                class="ft-dash-card"
+                @click="goToEbaDashboard()"
+                :disabled="selectedWMACount === 0"
+              >
+                <div class="ft-dash-card-icon spatial">
+                  <font-awesome-icon icon="fa-solid fa-map" />
+                </div>
+                <div class="ft-dash-card-text">
+                  <h4>Spatial Risk</h4>
+                  <p>Risk mapping</p>
+                </div>
+                <i class="fa fa-chevron-right ft-dash-card-arrow"></i>
+              </button>
+              <button
+                id="userDash"
+                class="ft-dash-card"
+                @click="goToUserDefinedDashboard()"
+                :disabled="selectedWMACount === 0"
+              >
+                <div class="ft-dash-card-icon user">
+                  <i class="fa fa-sliders"></i>
+                </div>
+                <div class="ft-dash-card-text">
+                  <h4>Custom</h4>
+                  <p>Your analytics</p>
+                </div>
+                <i class="fa fa-chevron-right ft-dash-card-arrow"></i>
+              </button>
+            </div>
+          </div>
+
+          <!-- Hidden programmatic buttons -->
+          <button id="home" style="display: none" @click="goHome()"></button>
+          <button id="verifiedDash" style="display: none"></button>
+
+          <!-- Partner Logos -->
+          <div class="ft-partner-section">
+            <span class="ft-partner-label">In collaboration with</span>
+            <div class="ft-partner-logos">
+              <img src="../../assets/award.svg" alt="AWARD" />
+              <img src="../../assets/knp.png" alt="KNP" />
+              <img src="../../assets/iucma.png" alt="IUCMA" />
+              <img src="../../assets/dws.png" alt="DWS" />
+              <img src="@/assets/jrs_square_logo.png" alt="JRS" />
+              <img src="../../assets/usaid.png" alt="USAID" />
+              <img src="../../assets/fbis_logo.png" alt="FBIS" />
+              <img src="../../assets/kartoza.png" alt="Kartoza" />
+              <img src="../../assets/frc.svg" alt="FRC" />
+              <img src="../../assets/wrc.jpg" alt="WRC" />
             </div>
           </div>
         </div>
-      </div>
-    </div>
-    <div id="overlay-logos">
-      <div
-        class="container-fluid container-fluid-logo"
-        style="margin-top: 0; margin-bottom: 0; position: absolute; bottom: 0"
-      >
-        <div class="grid grid-logo" style="margin-bottom: 2px">
-          <div><img src="../../assets/award.svg" alt="" /></div>
-          <div><img src="../../assets/knp.png" alt="" /></div>
-          <div><img src="../../assets/iucma.png" alt="" /></div>
-          <div><img src="../../assets/dws.png" alt="" /></div>
-          <div><img src="@/assets/jrs_square_logo.png" alt="" /></div>
-          <div><img src="../../assets/usaid.png" alt="" /></div>
-          <div><img src="../../assets/fbis_logo.png" alt="" /></div>
-          <div><img src="../../assets/kartoza.png" alt="" /></div>
-          <div><img src="../../assets/frc.svg" alt="" /></div>
-          <div><img src="../../assets/wrc.jpg" alt="" /></div>
-        </div>
-      </div>
-    </div>
-    <div id="overlay-legend">
-      <div class="row" style="height: 100%">
-        <div class="col-md-12">
-          <div class="card rounded-0">
-            <div class="card-header inwards_card">
-              <h6 style="color: white">
-                <i class="fa fa-line-chart" style="padding-right: 10px"></i>Flow
-                Status
-              </h6>
-            </div>
-            <div class="card-body">
-              <div class="container">
-                <i style="font-size: smaller"
-                  ><i class="dot" style="background: #0033cc"></i> High</i
-                ><br />
-                <i style="font-size: smaller"
-                  ><i class="dot" style="background: #3399ff"></i> Moderately
-                  High</i
-                ><br />
-                <i style="font-size: smaller"
-                  ><i class="dot" style="background: #99cc33"></i> Normal</i
-                ><br />
-                <i style="font-size: smaller"
-                  ><i class="dot" style="background: #ffff00"></i> Moderately
-                  Low</i
-                ><br />
-                <i style="font-size: smaller"
-                  ><i class="dot" style="background: #ffcc00"></i> Low</i
-                ><br />
-                <i style="font-size: smaller"
-                  ><i class="dot" style="background: #ff0000"></i> Very Low</i
-                ><br />
-                <i style="font-size: smaller"
-                  ><i class="dot" style="background: rgb(0, 0, 0)"></i>None</i
-                ><br />
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-    <div class="map-container">
-      <div class="container-fluid" style="height: 100%; width: 100%">
-        <div
-          class="col-md-12"
-          style="width: 100%; height: 100%; margin: 0; padding: 0"
-        >
-          <div
-            id="map"
-            style="width: 100%; height: 100%; position: fixed"
-          ></div>
-          <div id="tooltip" class="ol-tooltip">
-            <div id="tooltip-content"></div>
-          </div>
-        </div>
-      </div>
-    </div>
-    <div
-      class="reset-application-data-container"
-      style="
-        position: absolute;
-        bottom: 0;
-        margin-bottom: 50px;
-        margin-left: 20px;
-      "
-    >
-      <div
-        id="reset"
-        style="display: none"
-        class="btn inwards_button"
-        v-on:click="resetApplicationData"
-      >
-        Reset application data
-      </div>
-      <div
-        id="adminDash"
-        style="display: none"
-        class="btn inwards_button"
-        v-on:click="goAdminDash"
-      >
-        Admin Dashboard
       </div>
     </div>
   </div>
 </template>
-<style>
-.ol-popup {
-  opacity: 0.7;
-  font-weight: bold;
-  position: absolute;
-  background-color: white;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
-  padding: 5px;
-  border-radius: 10px;
-  border: 1px solid #cccccc;
-  bottom: 12px;
-  left: -40px;
-  min-width: 75px;
-}
-.card-body {
-  padding: 0;
-}
-.ol-popup:after,
-.ol-popup:before {
-  top: 100%;
-  border: solid transparent;
-  content: ' ';
-  height: 0;
-  width: 0;
-  position: absolute;
-  pointer-events: none;
-}
-.ol-popup:after {
-  border-top-color: white;
-  border-width: 10px;
-  left: 38px;
-  margin-left: -10px;
-}
-.ol-popup:before {
-  border-top-color: #cccccc;
-  border-width: 12px;
-  left: 38px;
-  margin-left: -12px;
-}
-.ol-popup-closer {
-  text-decoration: none;
-  position: absolute;
-  top: 2px;
-  right: 8px;
-}
-.ol-popup-closer:after {
-  content: '✖';
-}
-.ol-popup-content {
-  font-size: 12px;
-}
-.ol-popup-content p {
-  max-width: 90px;
-  margin-bottom: 0 !important;
-}
-#dashboard-map-unverified {
-  width: 100%;
-  height: 410px;
-}
-.ol-tooltip {
-  position: absolute;
-  background-color: white;
-  -webkit-filter: drop-shadow(0 1px 4px rgba(0, 0, 0, 0.2));
-  filter: drop-shadow(0 1px 4px rgba(0, 0, 0, 0.2));
-  padding: 10px;
-  border-radius: 10px;
-  border: 1px solid #cccccc;
-  bottom: 17px;
-  left: -50px;
-  min-width: 190px;
-}
-.ol-tooltip:after,
-.ol-tooltip:before {
-  top: 100%;
-  border: solid transparent;
-  content: ' ';
-  height: 0;
-  width: 0;
-  position: absolute;
-  pointer-events: none;
-}
-.ol-tooltip:after {
-  border-top-color: white;
-  border-width: 10px;
-  left: 48px;
-  margin-left: -10px;
-}
-.ol-tooltip:before {
-  border-top-color: #cccccc;
-  border-width: 12px;
-  left: 48px;
-  margin-left: -12px;
-}
-.ol-tooltip p {
-  margin-top: 0;
-  margin-bottom: 0;
-}
-</style>
+
 <script>
 import Map from 'ol/Map'
 import axios from 'axios'
@@ -510,6 +420,9 @@ import Overlay from 'ol/Overlay'
 export default {
   data() {
     return {
+      theme: localStorage.getItem('inwards-landing-theme') || 'light',
+      isOnline: navigator.onLine,
+      onlineTimer: null,
       stationsApi:
         'https://inwards.award.org.za/app_json/iucma_verification/station_status.php',
       selectedWMA: [],
@@ -530,13 +443,30 @@ export default {
       }),
     }
   },
+  computed: {
+    themeClass() {
+      return this.theme === 'dark' ? 'theme-dark' : 'theme-light'
+    },
+    isDarkTheme() {
+      return this.theme === 'dark'
+    },
+    selectedWMACount() {
+      return Object.keys(this.selectedFeatures).length
+    },
+  },
   mounted() {
     let self = this
     var tooltipContainer = document.getElementById('tooltip')
     var tooltipContent = document.getElementById('tooltip-content')
     let container = document.getElementById('popup')
     let closer = document.getElementById('popup-closer')
-    // Create a map
+
+    // Online status polling
+    this.onlineTimer = setInterval(() => {
+      this.isOnline = navigator.onLine
+    }, 5000)
+
+    // Create overlay
     this.overlay = new Overlay({
       element: container,
       autoPan: true,
@@ -544,15 +474,19 @@ export default {
         duration: 20,
       },
     })
+
+    // Create tile layer (OpenTopoMap)
+    let tileLayer = new TileLayer({
+      source: new XYZ({
+        url: 'https://{a-c}.tile.opentopomap.org/{z}/{x}/{y}.png',
+        attributions: '&copy; OpenTopoMap',
+      }),
+    })
+
+    // Create map
     let map = new Map({
       target: 'map',
-      layers: [
-        new TileLayer({
-          source: new XYZ({
-            url: 'https://{a-c}.tile.opentopomap.org/{z}/{x}/{y}.png',
-          }),
-        }),
-      ],
+      layers: [tileLayer],
       overlays: [this.overlay],
       view: new View({
         center: [0, 0],
@@ -560,6 +494,7 @@ export default {
       }),
     })
 
+    // Add tooltip
     var tooltip = new Overlay({
       element: tooltipContainer,
       autoPan: false,
@@ -569,18 +504,7 @@ export default {
     })
     map.addOverlay(tooltip)
 
-    stationsVectorLayer: new VectorLayer({
-      source: new VectorSource(),
-      style: function (feature) {
-        return new Style({
-          image: new CircleStyle({
-            radius: 5,
-            fill: new Fill({ color: 'rgba(255,0,0,0.5)' }),
-            stroke: new Stroke({ color: 'red', width: 1 }),
-          }),
-        })
-      },
-    })
+    // Create WMA vector layer
     let vectorLayer = new VectorLayer({
       source: new VectorSource({
         features: new GeoJSON({
@@ -593,17 +517,8 @@ export default {
       updateWhileAnimating: true,
       updateWhileInteracting: true,
     })
-    // when we move the mouse over a feature, we can change its style to
-    // highlight it temporarily
 
-    let stationsSelectedStyle = new Style({
-      image: new CircleStyle({
-        radius: 9,
-        fill: new Fill({ color: [51, 204, 51, 0.8] }),
-        stroke: new Stroke({ color: 'green', width: 1 }),
-      }),
-    })
-
+    // Styles
     let highlightStyle = new Style({
       stroke: new Stroke({
         color: [76, 175, 80, 0.6],
@@ -614,220 +529,7 @@ export default {
       }),
       zIndex: 1,
     })
-    let highlightedFeature = null
 
-    this.stationsVectorLayer.setZIndex(1)
-    map.addLayer(this.stationsVectorLayer)
-    map.addLayer(vectorLayer)
-    map.getView().fit(vectorLayer.getSource().getExtent())
-
-    let wmaNames = ['limpopo', 'olifants_letaba', 'inkomati_usuthu']
-    wmaNames = wmaNames.sort()
-    for (let i = 0; i < wmaNames.length; i++) {
-      wmaNames[i] = `'${wmaNames[i]}'`
-    }
-    let url = `${self.stationsApi}?wma=${wmaNames.join()}`
-    console.log(url)
-
-    let content = document.getElementById('popup-content')
-    if (navigator.onLine) {
-      let cancelToken = null
-      if (self.stationsRequest) {
-        cancelToken = self.stationsRequest.token
-      }
-      axios
-        .get(url, { cancelToken: cancelToken })
-        .then((response) => {
-          console.log(response.data)
-
-          this.loadStationsToMap(response.data)
-          let self = this
-          let x = 0
-          let styles = []
-          this.stationsVectorLayer
-            .getSource()
-            .forEachFeature(function (feature) {
-              let station = feature.get('station')
-              let latest = feature.get('record')
-              let color = feature.get('color')
-              //console.log(x);
-              //console.log(latest);
-              content.innerHTML =
-                '<p>' + station + '</p><br><p>' + latest + '</p>'
-              let siteText = station + ': \n' + latest + ' m3.s-1'
-
-              //console.log(color);
-              if (color == 'min') {
-                styles[x] = new Style({
-                  image: new CircleStyle({
-                    radius: 9,
-                    fill: new Fill({ color: '#FF0000' }),
-                    stroke: new Stroke({ color: 'green', width: 1 }),
-                  }),
-                  text: new Text({
-                    font: 'bold 12px "Open Sans", "Arial Unicode MS", "sans-serif"',
-                    placement: 'point',
-                    fill: new Fill({ color: '#000' }),
-                    stroke: new Stroke({ color: '#fff', width: 1 }),
-                    offsetX: 0,
-                    offsetY: -25,
-                  }),
-                })
-                let updatedStyle = styles[x].getText().setText(siteText)
-                styles.push(updatedStyle)
-                feature.setStyle(styles[x])
-              }
-              if (color == '95th') {
-                styles[x] = new Style({
-                  image: new CircleStyle({
-                    radius: 9,
-                    fill: new Fill({ color: '#FFCC00' }),
-                    stroke: new Stroke({ color: 'green', width: 1 }),
-                  }),
-                  text: new Text({
-                    font: 'bold 12px "Open Sans", "Arial Unicode MS", "sans-serif"',
-                    placement: 'point',
-                    fill: new Fill({ color: '#000' }),
-                    stroke: new Stroke({ color: '#fff', width: 1 }),
-                    offsetX: 0,
-                    offsetY: -25,
-                  }),
-                })
-                let updatedStyle = styles[x].getText().setText(siteText)
-                styles.push(updatedStyle)
-                feature.setStyle(styles[x])
-              }
-              if (color == '50th') {
-                styles[x] = new Style({
-                  image: new CircleStyle({
-                    radius: 9,
-                    fill: new Fill({ color: '#FFFF00' }),
-                    stroke: new Stroke({ color: 'green', width: 1 }),
-                  }),
-                  text: new Text({
-                    font: 'bold 12px "Open Sans", "Arial Unicode MS", "sans-serif"',
-                    placement: 'point',
-                    fill: new Fill({ color: '#000' }),
-                    stroke: new Stroke({ color: '#fff', width: 1 }),
-                    offsetX: 0,
-                    offsetY: -25,
-                  }),
-                })
-                let updatedStyle = styles[x].getText().setText(siteText)
-                styles.push(updatedStyle)
-                feature.setStyle(styles[x])
-              }
-              if (color == '25th') {
-                styles[x] = new Style({
-                  image: new CircleStyle({
-                    radius: 9,
-                    fill: new Fill({ color: '#99CC33' }),
-                    stroke: new Stroke({ color: 'green', width: 1 }),
-                  }),
-                  text: new Text({
-                    font: 'bold 12px "Open Sans", "Arial Unicode MS", "sans-serif"',
-                    placement: 'point',
-                    fill: new Fill({ color: '#000' }),
-                    stroke: new Stroke({ color: '#fff', width: 1 }),
-                    offsetX: 0,
-                    offsetY: -25,
-                  }),
-                })
-                let updatedStyle = styles[x].getText().setText(siteText)
-                styles.push(updatedStyle)
-                feature.setStyle(styles[x])
-              }
-              if (color == '5th') {
-                styles[x] = new Style({
-                  image: new CircleStyle({
-                    radius: 9,
-                    fill: new Fill({ color: '#3399ff' }),
-                    stroke: new Stroke({ color: 'green', width: 1 }),
-                  }),
-                  text: new Text({
-                    font: 'bold 12px "Open Sans", "Arial Unicode MS", "sans-serif"',
-                    text: 'hello',
-                    padding: [8, 8, 0, 0],
-                    placement: 'point',
-                    fill: new Fill({ color: '#000' }),
-                    stroke: new Stroke({ color: '#fff', width: 1 }),
-                    offsetX: 0,
-                    offsetY: -25,
-                  }),
-                })
-                let updatedStyle = styles[x].getText().setText(siteText)
-                styles.push(updatedStyle)
-                feature.setStyle(styles[x])
-              }
-              if (color == 'max') {
-                styles[x] = new Style({
-                  image: new CircleStyle({
-                    radius: 9,
-                    fill: new Fill({ color: '#0033cc' }),
-                    stroke: new Stroke({ color: 'green', width: 1 }),
-                  }),
-                  text: new Text({
-                    font: 'bold 12px "Open Sans", "Arial Unicode MS", "sans-serif"',
-                    placement: 'point',
-                    fill: new Fill({ color: '#000' }),
-                    stroke: new Stroke({ color: '#fff', width: 1 }),
-                    offsetX: 0,
-                    offsetY: -25,
-                  }),
-                })
-                let updatedStyle = styles[x].getText().setText(siteText)
-                styles.push(updatedStyle)
-                feature.setStyle(styles[x])
-              }
-              if (color == 'none') {
-                styles[x] = new Style({
-                  image: new CircleStyle({
-                    radius: 9,
-                    fill: new Fill({ color: '#000' }),
-                    stroke: new Stroke({ color: 'green', width: 1 }),
-                  }),
-                  text: new Text({
-                    font: 'bold 12px "Open Sans", "Arial Unicode MS", "sans-serif"',
-                    placement: 'point',
-                    textBaseline: 'top',
-                    fill: new Fill({ color: '#000' }),
-                    stroke: new Stroke({ color: '#fff', width: 1 }),
-                    offsetX: 0,
-                    offsetY: -25,
-                  }),
-                })
-                let updatedStyle = styles[x].getText().setText(siteText)
-                styles.push(updatedStyle)
-                feature.setStyle(styles[x])
-              }
-              //console.log(styles[x]);
-              x++
-            })
-        })
-        .catch((error) => {
-          console.log(error)
-        })
-    }
-    // Map on hover
-    map.on('pointermove', function (e) {
-      if (
-        highlightedFeature !== null &&
-        !self.selectedFeatures.hasOwnProperty(highlightedFeature.ol_uid)
-      ) {
-        highlightedFeature.setStyle(undefined)
-        highlightedFeature = null
-      }
-      map.forEachFeatureAtPixel(e.pixel, function (f) {
-        if (!self.selectedFeatures.hasOwnProperty(f.ol_uid)) {
-          //console.log(highlightedFeature);
-          highlightedFeature = f
-          f.setStyle(highlightStyle)
-          return true
-        }
-      })
-    })
-
-    // When map selected update the style
     let selectedStyle = new Style({
       stroke: new Stroke({
         color: [76, 97, 174, 0.9],
@@ -838,6 +540,54 @@ export default {
       }),
       zIndex: 1,
     })
+
+    let highlightedFeature = null
+
+    // Add layers
+    this.stationsVectorLayer.setZIndex(1)
+    map.addLayer(this.stationsVectorLayer)
+    map.addLayer(vectorLayer)
+    map.getView().fit(vectorLayer.getSource().getExtent())
+
+    // Load station data
+    let wmaNames = ['limpopo', 'olifants_letaba', 'inkomati_usuthu']
+    wmaNames = wmaNames.sort()
+    for (let i = 0; i < wmaNames.length; i++) {
+      wmaNames[i] = `'${wmaNames[i]}'`
+    }
+    let url = `${self.stationsApi}?wma=${wmaNames.join()}`
+
+    if (navigator.onLine) {
+      axios
+        .get(url)
+        .then((response) => {
+          this.loadStationsToMap(response.data)
+          this.styleStationsByFlowStatus()
+        })
+        .catch((error) => {
+          console.log(error)
+        })
+    }
+
+    // Map hover
+    map.on('pointermove', function (e) {
+      if (
+        highlightedFeature !== null &&
+        !self.selectedFeatures.hasOwnProperty(highlightedFeature.ol_uid)
+      ) {
+        highlightedFeature.setStyle(undefined)
+        highlightedFeature = null
+      }
+      map.forEachFeatureAtPixel(e.pixel, function (f) {
+        if (!self.selectedFeatures.hasOwnProperty(f.ol_uid)) {
+          highlightedFeature = f
+          f.setStyle(highlightStyle)
+          return true
+        }
+      })
+    })
+
+    // Checkbox event listeners
     document
       .getElementById('limpopo')
       .addEventListener('change', function (element) {
@@ -852,6 +602,7 @@ export default {
           feature.setStyle(selectedStyle)
         }
       })
+
     document
       .getElementById('olifants_letaba')
       .addEventListener('change', function (element) {
@@ -866,6 +617,7 @@ export default {
           feature.setStyle(selectedStyle)
         }
       })
+
     document
       .getElementById('inkomati_usuthu')
       .addEventListener('change', function (element) {
@@ -880,7 +632,8 @@ export default {
           feature.setStyle(selectedStyle)
         }
       })
-    // Check selected map from db
+
+    // Check stored selections
     stateStore.getState(stateStore.keys.selectedWMAs, function (selectedWMAs) {
       if (!selectedWMAs) {
         return
@@ -898,8 +651,9 @@ export default {
         $('.save-selection').attr('disabled', false)
       }
     })
+
+    // Map click - toggle WMA selection
     map.on('click', function (e) {
-      // Check if there is a feature
       map.forEachFeatureAtPixel(e.pixel, function (feature, layer) {
         if (!self.selectedFeatures.hasOwnProperty(feature.ol_uid)) {
           let check = feature.values_.wma
@@ -920,9 +674,30 @@ export default {
         return true
       })
     })
+
+    // Add KNP layer
     self.addKnpLayer(map)
+
+    // Close popup
+    if (closer) {
+      closer.onclick = function () {
+        self.overlay.setPosition(undefined)
+        closer.blur()
+        return false
+      }
+    }
+  },
+  beforeUnmount() {
+    if (this.onlineTimer) {
+      clearInterval(this.onlineTimer)
+    }
   },
   methods: {
+    toggleTheme() {
+      this.theme = this.theme === 'dark' ? 'light' : 'dark'
+      localStorage.setItem('inwards-landing-theme', this.theme)
+    },
+
     loadStationsToMap(stationsGeoJSONData) {
       let self = this
       self.stationsVectorLayer.setSource(
@@ -936,49 +711,58 @@ export default {
         })
       )
     },
-    fetchStations() {
+
+    styleStationsByFlowStatus() {
       let self = this
-      let wmaNames = ['limpopo', 'olifants_letaba', 'inkomati_usuthu']
-      let fs = require('fs')
-      let dir = path.join(app.getPath('userData'), '/stations')
-      // TODO : Create an util class for file storage
-      if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir)
+      let content = document.getElementById('popup-content')
+      let x = 0
+      let styles = []
+
+      const colorMap = {
+        min: '#FF0000',
+        '95th': '#FFCC00',
+        '50th': '#FFFF00',
+        '25th': '#99CC33',
+        '5th': '#3399ff',
+        max: '#0033cc',
+        none: '#000000',
       }
-      // Cancel previous request if any
-      if (this.stationsRequest) {
-        this.stationsRequest.cancel('Canceling stations request')
-        this.stationsRequest = null
-      }
-      // Wrap wma name with single quotes, for api purposes
-      wmaNames = wmaNames.sort()
-      for (let i = 0; i < wmaNames.length; i++) {
-        wmaNames[i] = `'${wmaNames[i]}'`
-      }
-      let url = `${self.stationsApi}?wma=${wmaNames.join()}`
-      let stationFile = `${dir}/${url.hashCode()}.json`
-      // Check if online
-      if (navigator.onLine) {
-        let cancelToken = null
-        if (self.stationsRequest) {
-          cancelToken = self.stationsRequest.token
-        }
-        axios
-          .get(url, { cancelToken: cancelToken })
-          .then((response) => {
-            self.mapDashboardRef.loadStationsToMap(response.data)
-          })
-          .catch((error) => {
-            console.log(error)
-          })
-      } else {
-        if (fs.existsSync(stationFile)) {
-          let jsonData = fs.readFileSync(stationFile, 'utf-8')
-          let stationsData = JSON.parse(jsonData)
-          self.mapDashboardRef.loadStationsToMap(stationsData)
-        }
-      }
+
+      this.stationsVectorLayer
+        .getSource()
+        .forEachFeature(function (feature) {
+          let station = feature.get('station')
+          let latest = feature.get('record')
+          let color = feature.get('color')
+
+          content.innerHTML =
+            '<p>' + station + '</p><br><p>' + latest + '</p>'
+          let siteText = station + ': \n' + latest + ' m\u00B3.s\u207B\u00B9'
+
+          if (colorMap[color]) {
+            styles[x] = new Style({
+              image: new CircleStyle({
+                radius: 9,
+                fill: new Fill({ color: colorMap[color] }),
+                stroke: new Stroke({ color: 'green', width: 1 }),
+              }),
+              text: new Text({
+                font: 'bold 12px "Open Sans", "Arial Unicode MS", "sans-serif"',
+                text: siteText,
+                placement: 'point',
+                fill: new Fill({ color: '#000' }),
+                stroke: new Stroke({ color: '#fff', width: 1 }),
+                offsetX: 0,
+                offsetY: -25,
+              }),
+            })
+            feature.setStyle(styles[x])
+          }
+          x++
+        })
     },
+
+    // Navigation methods
     saveSelection() {
       let self = this
       let _selectedWMA = []
@@ -988,6 +772,7 @@ export default {
       stateStore.setState(stateStore.keys.selectedWMAs, _selectedWMA)
       router.push({ path: 'dashboard' })
     },
+
     navDam() {
       let self = this
       let _selectedWMA = []
@@ -997,6 +782,7 @@ export default {
       stateStore.setState(stateStore.keys.selectedWMAs, _selectedWMA)
       router.push({ path: 'dam-dashboard' })
     },
+
     goToUserDefinedDashboard() {
       let self = this
       let _selectedWMA = []
@@ -1006,6 +792,7 @@ export default {
       stateStore.setState(stateStore.keys.selectedWMAs, _selectedWMA)
       router.push({ path: 'user-dashboard' })
     },
+
     goToKnpDashboard() {
       let self = this
       let _selectedWMA = []
@@ -1015,18 +802,21 @@ export default {
       stateStore.setState(stateStore.keys.selectedWMAs, _selectedWMA)
       router.push({ path: 'knp-dashboard' })
     },
+
     goToIUCMADashboard() {
       let _selectedWMA = []
       _selectedWMA.push('inkomati_usuthu')
       stateStore.setState(stateStore.keys.selectedWMAs, _selectedWMA)
       router.push({ path: 'iucma-dashboard' })
     },
+
     goToIUCMAWqDashboard() {
       let _selectedWMA = []
       _selectedWMA.push('inkomati_usuthu')
       stateStore.setState(stateStore.keys.selectedWMAs, _selectedWMA)
       router.push({ path: 'iucma-wq-dashboard' })
     },
+
     goToWqDashboard() {
       let self = this
       let _selectedWMA = []
@@ -1036,6 +826,7 @@ export default {
       stateStore.setState(stateStore.keys.selectedWMAs, _selectedWMA)
       router.push({ path: 'wq-dashboard' })
     },
+
     goToFishDashboard() {
       let self = this
       let _selectedWMA = []
@@ -1045,6 +836,7 @@ export default {
       stateStore.setState(stateStore.keys.selectedWMAs, _selectedWMA)
       router.push({ path: 'fish-dashboard' })
     },
+
     goToInvertDashboard() {
       let self = this
       let _selectedWMA = []
@@ -1054,6 +846,11 @@ export default {
       stateStore.setState(stateStore.keys.selectedWMAs, _selectedWMA)
       router.push({ path: 'invert-dashboard' })
     },
+
+    goToFishtracDashboard() {
+      router.push({ path: 'fishtrac-dashboard' })
+    },
+
     goToEbaDashboard() {
       let self = this
       let _selectedWMA = []
@@ -1063,6 +860,7 @@ export default {
       stateStore.setState(stateStore.keys.selectedWMAs, _selectedWMA)
       router.push({ path: 'eba-dashboard' })
     },
+
     goToHealthDashboard() {
       let self = this
       let _selectedWMA = []
@@ -1072,6 +870,7 @@ export default {
       stateStore.setState(stateStore.keys.selectedWMAs, _selectedWMA)
       router.push({ path: 'wq-health-dashboard' })
     },
+
     goToLoadDashboard() {
       let self = this
       let _selectedWMA = []
@@ -1081,6 +880,7 @@ export default {
       stateStore.setState(stateStore.keys.selectedWMAs, _selectedWMA)
       router.push({ path: 'load-dashboard' })
     },
+
     goHome() {
       let self = this
       let _selectedWMA = []
@@ -1090,6 +890,7 @@ export default {
       stateStore.setState(stateStore.keys.selectedWMAs, _selectedWMA)
       router.push({ path: '/' })
     },
+
     goAdminDash() {
       let self = this
       let _selectedWMA = []
@@ -1099,6 +900,7 @@ export default {
       stateStore.setState(stateStore.keys.selectedWMAs, _selectedWMA)
       router.push({ path: 'admin-dashboard' })
     },
+
     resetApplicationData(e) {
       stateStore.clearAll(() => {
         setTimeout(function () {
@@ -1106,6 +908,7 @@ export default {
         }, 200)
       })
     },
+
     addKnpLayer(map) {
       const knpJson = require('../../assets/knp.json')
       let knpLayer = new VectorLayer({
@@ -1140,3 +943,333 @@ export default {
   },
 }
 </script>
+
+<style scoped>
+/* ═══════════════════════════════════════════════════
+   Base Layout
+   ═══════════════════════════════════════════════════ */
+.landing-page {
+  min-height: 100vh;
+  background: var(--ft-bg-deepest);
+  display: flex;
+  flex-direction: column;
+  font-family: 'Open Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  color: var(--ft-text-secondary);
+}
+
+.main-container {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* ═══════════════════════════════════════════════════
+   Map Section
+   ═══════════════════════════════════════════════════ */
+.map-section {
+  flex: 1;
+  position: relative;
+  background: var(--ft-bg-elevated);
+  overflow: hidden;
+}
+
+.map-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+}
+
+/* Fade edge into panel */
+.map-section::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 48px;
+  background: linear-gradient(to right, transparent, var(--ft-bg-surface));
+  pointer-events: none;
+  z-index: 5;
+}
+
+/* ═══════════════════════════════════════════════════
+   Map Overlay Positioning
+   ═══════════════════════════════════════════════════ */
+.wma-card {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  min-width: 240px;
+  z-index: 10;
+}
+
+.legend-card {
+  position: absolute;
+  bottom: 16px;
+  left: 16px;
+  z-index: 10;
+}
+
+/* ── WMA Selection List ── */
+.wma-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 4px 10px 10px;
+}
+
+.wma-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.15s;
+  margin: 0;
+}
+
+.wma-item:hover {
+  background: var(--ft-row-hover);
+}
+
+.wma-item input[type='checkbox'] {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.wma-checkbox {
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--ft-border-hover);
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.15s;
+}
+
+.wma-item input:checked ~ .wma-checkbox {
+  background: var(--ft-accent);
+  border-color: var(--ft-accent);
+}
+
+.wma-item input:checked ~ .wma-checkbox::after {
+  content: '\2713';
+  font-size: 12px;
+  color: white;
+  font-weight: bold;
+  line-height: 1;
+}
+
+.wma-label {
+  color: var(--ft-text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.wma-count {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 10px 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--ft-glass-border);
+  font-size: 11px;
+  color: var(--ft-text-muted);
+}
+
+.count-badge {
+  background: var(--ft-accent);
+  color: var(--ft-text-on-accent);
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+/* ── Flow Legend ── */
+.legend-items {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 2px 14px 12px;
+}
+
+.legend-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--ft-text-secondary);
+}
+
+.legend-dot {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 1px solid var(--ft-border-hover);
+  flex-shrink: 0;
+}
+
+/* ── Admin Controls ── */
+.admin-controls {
+  position: absolute;
+  bottom: 16px;
+  left: 280px;
+  display: flex;
+  gap: 8px;
+  z-index: 10;
+}
+
+.admin-btn {
+  background: var(--ft-glass-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  color: var(--ft-text-secondary);
+  border: 1px solid var(--ft-glass-border);
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.admin-btn:hover {
+  background: var(--ft-accent-subtle);
+  border-color: var(--ft-accent);
+  color: var(--ft-accent);
+}
+
+/* ═══════════════════════════════════════════════════
+   Dashboard Panel
+   ═══════════════════════════════════════════════════ */
+.dashboard-panel {
+  width: 560px;
+  background: var(--ft-bg-surface);
+  border-left: 1px solid var(--ft-border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  flex-shrink: 0;
+  transition: background-color 0.3s ease, border-color 0.3s ease;
+}
+
+/* ── Panel Header ── */
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid var(--ft-border);
+  flex-shrink: 0;
+  transition: border-color 0.3s ease;
+}
+
+.panel-title-area {
+  display: flex;
+  flex-direction: column;
+}
+
+.panel-title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 300;
+  letter-spacing: 3px;
+  color: var(--ft-text-primary);
+}
+
+.panel-subtitle {
+  font-size: 11px;
+  color: var(--ft-text-muted);
+  letter-spacing: 0.3px;
+  margin-top: 2px;
+}
+
+.panel-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* ── Selection Prompt ── */
+.selection-prompt {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 24px;
+  background: var(--ft-accent-subtle);
+  border-bottom: 1px solid var(--ft-border);
+  font-size: 12px;
+  color: var(--ft-accent);
+  flex-shrink: 0;
+}
+
+.prompt-icon {
+  font-size: 14px;
+  animation: ft-prompt-pulse 2s ease-in-out infinite;
+}
+
+/* ═══════════════════════════════════════════════════
+   Scrollable Content
+   ═══════════════════════════════════════════════════ */
+.panel-content {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Category Spacing ── */
+.card-category {
+  margin-bottom: 16px;
+}
+
+/* ═══════════════════════════════════════════════════
+   Responsive
+   ═══════════════════════════════════════════════════ */
+@media (max-width: 1200px) {
+  .dashboard-panel {
+    width: 480px;
+  }
+}
+
+@media (max-width: 992px) {
+  .main-container {
+    flex-direction: column;
+  }
+
+  .map-section {
+    height: 45vh;
+    flex: none;
+  }
+
+  .map-section::after {
+    display: none;
+  }
+
+  .dashboard-panel {
+    width: 100%;
+    border-left: none;
+    border-top: 1px solid var(--ft-border);
+  }
+}
+
+@media (max-width: 600px) {
+  .dashboard-panel {
+    width: 100%;
+  }
+}
+</style>

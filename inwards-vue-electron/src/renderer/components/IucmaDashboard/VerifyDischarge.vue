@@ -307,9 +307,8 @@
   </template>
   <script>
   import $ from 'jquery';
-  const { dialog } = require('electron').remote;
-  const { remote } = require('electron');
-  const path = require("path");
+  import { remote } from '../../services/electron-compat';
+  const { dialog } = remote;
   import stateStore from '../../store/state_handler';
   import { textHeights } from 'ol/render/canvas';
   import PlateList from "./PlateList";
@@ -378,7 +377,7 @@
            // console.log(this.userCode);
         }
         );
-        this.$http.get('https://inwards.award.org.za/app_json/iucma_verification/stations_all.php')
+        this.$axios.get('https://inwards.award.org.za/app_json/iucma_verification/stations_all.php')
         .then(
           response => {
             this.stations = response.data;
@@ -387,7 +386,7 @@
         .catch(function (error) {
           console.log(error);
         });
-        this.$http.get('https://inwards.award.org.za/app_json/gauge_heights.php')
+        this.$axios.get('https://inwards.award.org.za/app_json/gauge_heights.php')
         .then(
           response => {
             this.gaugeHeights = response.data;
@@ -397,7 +396,7 @@
           console.log(error);
         });
     }, 
-    beforeDestroy() {
+    beforeUnmount() {
       document.removeEventListener('click', this.closePopover);
     },    
     methods: {
@@ -547,7 +546,7 @@
         let siteCode = stationSplit[0];
         let heightPlate = this.selectedGaugeHeight;
         //console.log('https://inwards.award.org.za/app_json/plate_convert.php?station='+siteCode+'&height='+heightPlate);
-        this.$http.get('https://inwards.award.org.za/app_json/iucma_verification/plate_convert.php?station='+siteCode+'&height='+heightPlate)
+        this.$axios.get('https://inwards.award.org.za/app_json/iucma_verification/plate_convert.php?station='+siteCode+'&height='+heightPlate)
         .then(
           response => {
             this.discharge = response.data;
@@ -573,7 +572,7 @@
         const url = 'https://inwards.award.org.za/app_json/iucma_verification/closest_record.php';
         const fullUrl = `${url}?station=${encodeURIComponent(siteCode)}&date=${encodeURIComponent(this.currentDateTimeInput)}`;
 
-        this.$http.get(fullUrl)
+        this.$axios.get(fullUrl)
         .then(response => {
             this.discharge = response.data;
             this.nextFunction(); // This is correctly placed to ensure calculations happen after data load.
@@ -622,7 +621,7 @@
         };
 
         const url = 'https://inwards.award.org.za/app_json/iucma_verification/capture_correction.php';
-        this.$http.get(url, {params: params}).then(response => {
+        this.$axios.get(url, {params: params}).then(response => {
             
             this.entryId = response.data.id;
             //console.log(this.entryId);
@@ -637,7 +636,7 @@
 
         const url = 'https://inwards.award.org.za/app_json/iucma_verification/apply_correction.php';
         const fullUrl = `${url}?id=${encodeURIComponent(this.entryId)}`;
-        this.$http.get(fullUrl)
+        this.$axios.get(fullUrl)
         .then(response => {
           //console.log(response.data);
           if (response.data.status === true) {
@@ -669,7 +668,7 @@
     },
     loadCorrections (siteCode){
       //console.log("https://inwards.award.org.za/app_json/iucma_verification/correction_list.php?site='" + siteCode);
-    this.$http.get('https://inwards.award.org.za/app_json/iucma_verification/correction_list.php?site='+ siteCode)
+    this.$axios.get('https://inwards.award.org.za/app_json/iucma_verification/correction_list.php?site='+ siteCode)
         .then(
           response => {
             this.corrections = response.data;

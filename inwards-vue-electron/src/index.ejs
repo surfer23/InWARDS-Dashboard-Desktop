@@ -4,28 +4,29 @@
 <head>
   <meta charset="utf-8">
   <title>INWARDS</title>
-  <% if (htmlWebpackPlugin.options.nodeModules) { %>
-  <!-- Add `node_modules/` to global paths so `require` works properly in development -->
   <script>
-      require('module').globalPaths.push('<%= htmlWebpackPlugin.options.nodeModules.replace(/\\/g, '\\\\') %>')
+    // Polyfill for global (needed by some libraries)
+    window.global = window;
   </script>
-  <% } %>
 </head>
 
 <body class="dark-mode">
   <div id="app"></div>
   <!-- Set `__static` path to static files in production -->
-  <% if (!htmlWebpackPlugin.options.isBrowser && !htmlWebpackPlugin.options.isDevelopment) { %>
+  <% if (!htmlWebpackPlugin.options.isDevelopment) { %>
   <script>
-      window.__static = require('path').join(__dirname, '/static').replace(/\\/g, '\\\\')
+    // In production, __static is set relative to the HTML file
+    window.__static = './static';
   </script>
   <% } %>
 
-  <!-- webpack builds are automatically injected -->
-    <script>
-      // See https://github.com/facebook/react/issues/20829#issuecomment-802088260
-      if (!crossOriginIsolated) SharedArrayBuffer = ArrayBuffer;
-    </script>
+  <script>
+    // See https://github.com/facebook/react/issues/20829#issuecomment-802088260
+    // SharedArrayBuffer polyfill for sql.js WASM
+    if (!crossOriginIsolated && typeof SharedArrayBuffer === 'undefined') {
+      window.SharedArrayBuffer = ArrayBuffer;
+    }
+  </script>
   <!-- webpack builds are automatically injected -->
 </body>
 

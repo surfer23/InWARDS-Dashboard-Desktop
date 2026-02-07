@@ -60,7 +60,7 @@ stateStore.getState(
       }
     );
   console.log('https://inwards.award.org.za/app_json/admin/support_tickets.php?user_code='+this.userCode);
-  this.$http.get('https://inwards.award.org.za/app_json/admin/support_tickets.php?user_code='+this.userCode)
+  this.$axios.get('https://inwards.award.org.za/app_json/admin/support_tickets.php?user_code='+this.userCode)
     .then(
       response => {
         this.stations = response.data;

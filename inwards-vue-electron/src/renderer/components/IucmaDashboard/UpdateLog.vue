@@ -114,10 +114,15 @@
   </template>
   <script>
   import $ from 'jquery';
-  const { dialog } = require('electron').remote;
-  const { remote } = require('electron');
-  const path = require("path");
+  import { remote } from '../../services/electron-compat';
+  const { dialog } = remote;
   import stateStore from '../../store/state_handler';
+
+  // Helper function to get filename from path (replaces path.basename)
+  function getBasename(filePath) {
+    if (!filePath) return '';
+    return filePath.split(/[\\/]/).pop();
+  }
   export default {
       data: function() {
           return {
@@ -150,7 +155,7 @@
         submitLogUpdate (id) {
             let idSend = id;
             //console.log('https://inwards.award.org.za/app_json/knp_log_edit.php?id='+idSend+'&user_code='+this.userCode);
-            this.$http.get('https://inwards.award.org.za/app_json/knp_log_edit.php?id='+idSend+'&user_code='+this.userCode)
+            this.$axios.get('https://inwards.award.org.za/app_json/knp_log_edit.php?id='+idSend+'&user_code='+this.userCode)
             .then(
             response => {
                 this.records = response.data;
@@ -178,7 +183,7 @@
         },
         onUpdateFileUpload(){
             this.attachFile = this.$refs.attachFile.files[0];
-            this.fileName = path.basename(this.attachFile.path);
+            this.fileName = getBasename(this.attachFile.path);
             document.getElementById("fileUpdate").value = this.fileName;
             this.fileCurrent = this.fileName;
         },

@@ -4,8 +4,8 @@
         <a href="#" id="popup-closer" class="ol-popup-closer"></a>
         <div id="popup-content" class="ol-popup-content"></div>
       </div>
-      <template v-for="(child) in popups">
-        <component :is="child" :key="child.name" :ref="child.id"></component>
+      <template v-for="(child) in popups" :key="child.name">
+        <component :is="child" :ref="child.id"></component>
       </template>
       <div class="card rounded-0">
         <div class="card-body">
@@ -115,7 +115,6 @@
 </style>
 <script>
   /* eslint-disable no-unused-vars */
-  import Vue from 'vue';
   import Map from 'ol/Map';
   import View from 'ol/View';
   import {transform} from 'ol/proj';
@@ -376,7 +375,8 @@
               self.selectedStations.splice(index, 1);
             }
           }
-          self.$bus.$emit('stationSelectedFromMap', station, !isStationSelected);
+          // Mitt only passes one payload argument, so we need to pass an object
+          self.$bus.emit('stationSelectedFromMap', { station: station, selected: !isStationSelected });
           return true;
         });
       },

@@ -40,7 +40,7 @@
           },
           methods: {
             showRiskTable (url_parameters) {
-              this.$http.get('https://inwards.award.org.za/app_json/wq_dash/median_risk.php?'+url_parameters)
+              this.$axios.get('https://inwards.award.org.za/app_json/wq_dash/median_risk.php?'+url_parameters)
                 .then(
                   response => {
                     this.medianData = response.data;

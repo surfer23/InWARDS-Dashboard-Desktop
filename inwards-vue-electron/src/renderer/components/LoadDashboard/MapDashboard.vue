@@ -1,8 +1,8 @@
 <template>
   <div>
-    <div id="popup" class="ol-popup">
-      <a href="#" id="popup-closer" class="ol-popup-closer"></a>
-      <div id="popup-content" class="ol-popup-content"></div>
+    <div id="popup" ref="popup" class="ol-popup">
+      <a href="#" id="popup-closer" ref="popupCloser" class="ol-popup-closer"></a>
+      <div id="popup-content" ref="popupContent" class="ol-popup-content"></div>
     </div>
     <div v-for="child in popups" :key="child.name">
       <component :is="child" :ref="child.id"></component>
@@ -120,7 +120,6 @@
 </style>
 <script>
 /* eslint-disable no-unused-vars */
-import Vue from 'vue'
 import Map from 'ol/Map'
 import View from 'ol/View'
 import { transform } from 'ol/proj'
@@ -199,8 +198,8 @@ export default {
   mounted() {},
   methods: {
     initiateMap() {
-      let container = document.getElementById('popup')
-      let closer = document.getElementById('popup-closer')
+      let container = this.$refs.popup
+      let closer = this.$refs.popupCloser
       var tooltipContainer = document.getElementById('tooltip')
       var tooltipContent = document.getElementById('tooltip-content')
       let self = this
@@ -208,10 +207,12 @@ export default {
        * Add a click handler to hide the popup.
        * @return {boolean} Don't follow the href.
        */
-      closer.onclick = function () {
-        self.overlay.setPosition(undefined)
-        closer.blur()
-        return false
+      if (closer) {
+        closer.onclick = function () {
+          self.overlay.setPosition(undefined)
+          closer.blur()
+          return false
+        }
       }
       /**
        * Create an overlay to anchor the popup the map
@@ -404,7 +405,8 @@ export default {
             self.selectedLoadStations.splice(index, 1)
           }
         }
-        self.$bus.$emit('stationSelectedFromMap', station, !isStationSelected)
+        // Mitt only passes one payload argument, so we need to pass an object
+        self.$bus.emit('stationSelectedFromMap', { station: station, selected: !isStationSelected })
         return true
       })
     },

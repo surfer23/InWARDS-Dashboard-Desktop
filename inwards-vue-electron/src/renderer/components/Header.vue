@@ -2,38 +2,38 @@
   <div>
   </div>
 </template>
+
 <style>
   .pos-f-t {
     color: white;
   }
 </style>
+
 <script>
-  // import $ from 'jquery';
-  const remote = require('electron').remote;
-  export default {
-    name: 'Header',
-    methods: {
-      login () {
-      },
-      close () {
-        var window = remote.getCurrentWindow();
-        window.close();
-      },
-      minimize () {
-        var window = remote.getCurrentWindow();
-        window.minimize();
-      },
-      maximize () {
-        var window = remote.getCurrentWindow();
-        if (!window.isMaximized()) {
-          window.maximize();
-        } else {
-          window.unmaximize();
-        }
+export default {
+  name: 'Header',
+  methods: {
+    login() {
+      // Login logic
+    },
+    close() {
+      if (window.electronAPI) {
+        window.electronAPI.closeWindow();
       }
     },
-    mounted () {
-      console.log(window.navigator.onLine);
+    minimize() {
+      if (window.electronAPI) {
+        window.electronAPI.minimizeWindow();
+      }
+    },
+    maximize() {
+      if (window.electronAPI) {
+        window.electronAPI.maximizeWindow();
+      }
     }
-  };
+  },
+  mounted() {
+    console.log('Online status:', window.navigator.onLine);
+  }
+};
 </script>

@@ -4,7 +4,13 @@
     <div class="container-fluid" style="height: 100%;">
       <div class="row no-gutters" style="height: 100%;">
         <div class="col-md-4 no-float left-panel" style="background: #252526; padding-bottom: 50px; margin-right: 0px; margin-top: 6px;">
-          <MapDashboard ref="mapDashboard"/>
+          <!-- Using BaseMapDashboard with unique mapId -->
+          <BaseMapDashboard
+            ref="mapDashboard"
+            map-id="knp-dashboard-map"
+            map-height="410px"
+            :connected-to-tree="false"
+          />
           <div class="v-space"></div>
           <div class="card rounded-0" style="margin-top: 5px; margin-bottom: 5px;">
             <div class="card-body">
@@ -135,7 +141,8 @@
 <script>
   import axios from 'axios';
   import NavButtons from '../../components/NavButtons';
-  import MapDashboard from './MapDashboard';
+  // Import base component instead of local one
+  import BaseMapDashboard from '../shared/BaseMapDashboard.vue';
   import ComplianceTable from './ComplianceTable';
   import SubmitLog from './SubmitLog';
   import RiverLog from './RiverLog';
@@ -155,14 +162,15 @@
   import stateStore from '../../store/state_handler';
   import $ from 'jquery';
   import {Fill, Stroke, Style} from 'ol/style';
-  import path from 'path';
+  import { remote } from '../../services/electron-compat';
   import WmaJson from '../../assets/wma_merge.json';
   require('promise.prototype.finally').shim();
-  const { app } = require('electron').remote;
+  const { app } = remote;
   export default {
+    name: 'KnpDashboard',
 
     components: {
-      MapDashboard,
+      BaseMapDashboard,
       NavButtons,
       ComplianceTable,
       CrocChart,
@@ -188,11 +196,16 @@
         selectedWMAs: []
       };
     },
+
+    computed: {
+      mapDashboardRef() {
+        return this.$refs.mapDashboard;
+      }
+    },
+
     mounted () {
-      let self = this;
-      this.mapDashboardRef = this.$refs.mapDashboard;
-      let map = this.$refs.mapDashboard.map;
-      this.mapDashboardRef.connectedToTree = false;
+      const self = this;
+      const map = this.$refs.mapDashboard.getMap();
       let startDate = new Date();
       startDate = new Date(startDate.getFullYear(), (startDate.getMonth()-1), 1);
       let endDate = this.formatDate(new Date());
@@ -227,14 +240,18 @@
       showPlatesForm () {
         this.$refs.submissionsComponent.showPlatesForm();
       },
-      fetchStations () {
+      async fetchStations () {
         let self = this;
         let wmaNames = ['limpopo', 'olifants_letaba', 'inkomati_usuthu'];
-        let fs = require('fs');
-        let dir = path.join(app.getPath('userData'), '/stations');
+
+        // Get user data path via IPC
+        const userDataPath = await window.electronAPI.getUserDataPath();
+        const dir = `${userDataPath}/stations`;
+
         // TODO : Create an util class for file storage
-        if (!fs.existsSync(dir)) {
-          fs.mkdirSync(dir);
+        const dirExists = await window.electronAPI.fileExists(dir);
+        if (!dirExists) {
+          await window.electronAPI.createDirectory(dir);
         }
         // Cancel previous request if any
         if (this.stationsRequest) {
@@ -247,7 +264,9 @@
           wmaNames[i] = `'${wmaNames[i]}'`;
         }
         let url = `${self.stationsApi}?wma=${wmaNames.join()}`;
-        let stationFile = `${dir}/${url.hashCode()}.json`;
+        // Inline hash function to replace url.hashCode()
+        const hashCode = url.split('').reduce((a, b) => { a = ((a << 5) - a) + b.charCodeAt(0); return a & a }, 0);
+        let stationFile = `${dir}/${hashCode}.json`;
         // Check if online
         if (navigator.onLine) {
           let cancelToken = null;
@@ -260,8 +279,9 @@
             console.log(error);
           });
         } else {
-          if (fs.existsSync(stationFile)) {
-            let jsonData = fs.readFileSync(stationFile, 'utf-8');
+          const fileExists = await window.electronAPI.fileExists(stationFile);
+          if (fileExists) {
+            const jsonData = await window.electronAPI.readFile(stationFile);
             let stationsData = JSON.parse(jsonData);
             self.mapDashboardRef.loadStationsToMap(stationsData);
           }

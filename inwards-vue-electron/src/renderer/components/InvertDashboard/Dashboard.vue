@@ -14,10 +14,32 @@
           </nav>
           <div class="tab-content py-3 px-3 px-sm-0" id="nav-tabContent">
             <div class="tab-pane fade show active" id="tabs-1" role="tabpanel">
-              <InvertTree ref="invertTree"/>
+              <!-- InvertTree using BaseCatchmentTree with unique ID -->
+              <BaseCatchmentTree
+                ref="invertTree"
+                tree-id="invert-sites"
+                title=""
+                :refreshable="false"
+                :selectable="true"
+                :search-enabled="true"
+                container-height="300px"
+                @tree-clicked="onInvertTreeClickedHandler"
+                @tree-ready="onInvertTreeReadyHandler"
+              />
             </div>
             <div class="tab-pane fade" id="tabs-2" role="tabpanel">
-              <HydroTree ref="hydroTree"/>
+              <!-- HydroTree using BaseCatchmentTree with unique ID -->
+              <BaseCatchmentTree
+                ref="hydroTree"
+                tree-id="invert-hydro-sites"
+                title=""
+                :refreshable="false"
+                :selectable="true"
+                :search-enabled="true"
+                container-height="300px"
+                @tree-clicked="onHydroTreeClickedHandler"
+                @tree-ready="onHydroTreeReadyHandler"
+              />
             </div>
           </div>
           <div class="v-space"></div>
@@ -179,8 +201,8 @@
   import JulianMax from './JulianMax';
   import JulianMin from './JulianMin';
   import BaseFlowIndex from './BaseFlowIndex';
-  import InvertTree from './InvertTree';
-  import HydroTree from './HydroTree';
+  // Import base component for trees
+  import BaseCatchmentTree from '../shared/BaseCatchmentTree.vue';
   import stateStore from '../../store/state_handler';
   import VectorLayer from 'ol/layer/Vector';
   import VectorSource from 'ol/source/Vector';
@@ -189,11 +211,47 @@
   import {Fill, Stroke, Style} from 'ol/style';
   import { GridLoader } from 'vue-spinner/dist/vue-spinner.min.js';
   import $ from 'jquery';
-  import path from 'path';
-  const { dialog, app } = require('electron').remote;
+  import { remote, dialog } from '../../services/electron-compat';
+  // Import the event bus composable for automatic cleanup
+  import { useEventBus } from '../../composables/useEventBus';
+  const { app } = remote;
   require('promise.prototype.finally').shim();
 
   export default {
+    name: 'InvertDashboard',
+
+    components: {
+      Header,
+      NavButtons,
+      MapDashboard,
+      GridLoader,
+      BaseCatchmentTree,
+      Multiselect,
+      InvertSiteOverview,
+      StatusBar,
+      InvertTimeseries,
+      HighPulse,
+      MonthlyMeans,
+      ZeroFlows,
+      JulianMax,
+      JulianMin,
+      HighFlowDuration,
+      ExtremeLowPulses,
+      ExtremeLowDuration,
+      BaseFlowIndex,
+      LowFlowTimeseries,
+      HighFlowTimeseries,
+      InvertBox,
+      InvertDuration,
+      InvertRadar
+    },
+
+    setup() {
+      // Use the event bus composable - listeners will be auto-cleaned on unmount
+      const { on, emit } = useEventBus();
+      return { busOn: on, busEmit: emit };
+    },
+
     data () {
       return {
         invertAPI: 'https://inwards.award.org.za/app_json/invert_sites.php',
@@ -216,11 +274,21 @@
         radius: '2px'
       };
     },
+
+    computed: {
+      mapDashboardRef() {
+        return this.$refs.mapDashboard;
+      },
+      invertTreeRef() {
+        return this.$refs.invertTree;
+      },
+      hydroTreeRef() {
+        return this.$refs.hydroTree;
+      }
+    },
+
     mounted () {
       let self = this;
-      self.mapDashboardRef = self.$refs.mapDashboard;
-      self.invertTreeRef = self.$refs.invertTree;
-      self.hydroTreeRef = self.$refs.hydroTree;
       stateStore.getState(
         stateStore.keys.selectedWMAs,
         function (selectedWMAs) {
@@ -231,21 +299,22 @@
             return false;
           }
           self.selectedWMAs = selectedWMAs;
-          // console.log(selectedWMAs);
           self.mapDashboardRef.showSelectedWMA(selectedWMAs);
           self.fetchStations();
         }
       );
-      self.$bus.$on('stationSelectedFromMap', (station, isStationSelected) => {
-        self.invertTreeRef.toggleNode(station, isStationSelected);
+      // Use busOn for automatic cleanup on unmount
+      self.busOn('stationSelectedFromMap', (payload) => {
+        const { station, selected } = payload;
+        self.invertTreeRef.toggleNode(station, selected);
+        self.hydroTreeRef.toggleNode(station, selected);
       });
-      self.$bus.$on('stationSelectedFromMap', (station, isStationSelected) => {
-        self.hydroTreeRef.toggleNode(station, isStationSelected);
-      });
-      self.$bus.$on('refreshStations', () => {
+      self.busOn('refreshStations', () => {
         self.fetchStations();
       });
-      self.$bus.$on('addStationsToStore', (stations, chartStoredId) => {
+      self.busOn('addStationsToStore', (payload) => {
+        // Mitt only passes one argument
+        const { stations, chartStoredId } = payload;
         self.addStationsToStore(stations, chartStoredId);
       });
       let map = this.$refs.mapDashboard.map;
@@ -262,37 +331,9 @@
       }
       startDate = yyyy + '-' + mm + '-' + dd;
       document.getElementById('dateStart').setAttribute('value', startDate);
-      this.invertTreeRef.refreshStations();
-      this.hydroTreeRef.refreshStations();
       self.fetchStations();
       self.addKnpLayer(map);
       this.loading = false;
-    },
-    components: {
-      Header,
-      NavButtons,
-      MapDashboard,
-      GridLoader,
-      InvertTree,
-      HydroTree,
-      Multiselect,
-      InvertSiteOverview,
-      StatusBar,
-      InvertTimeseries,
-      HighPulse,
-      MonthlyMeans,
-      ZeroFlows,
-      JulianMax,
-      JulianMin,
-      HighFlowDuration,
-      ExtremeLowPulses,
-      ExtremeLowDuration,
-      BaseFlowIndex,
-      LowFlowTimeseries,
-      HighFlowTimeseries,
-      InvertBox,
-      InvertDuration,
-      InvertRadar
     },
     methods: {
       showSelectMap () {
@@ -359,16 +400,24 @@
         this.$refs.monthlyComponent.displayChart(this.selectedHydroStations, this.selectedInvertStations, this.formatDate(dateStart), this.formatDate(dateEnd), this.selectedFamily);
         this.loading = false;
       },
-      fetchStations () {
+      async fetchStations () {
         let self = this;
         let wmaNames = Object.assign([], self.selectedWMAs);
         // console.log(self.selectedWMAs);
-        let fs = require('fs');
-        let dir = path.join(app.getPath('userData'), '/stations');
-        // TODO : Create an util class for file storage
-        if (!fs.existsSync(dir)) {
-          fs.mkdirSync(dir);
+
+        // Helper function to generate hash code for URL
+        const hashCode = (str) => str.split('').reduce((a, b) => { a = ((a << 5) - a) + b.charCodeAt(0); return a & a }, 0);
+
+        // Get user data path and ensure stations directory exists
+        const userDataPath = await window.electronAPI.getUserDataPath();
+        const dir = `${userDataPath}/stations`;
+
+        // Ensure directory exists
+        const dirExists = await window.electronAPI.fileExists(dir);
+        if (!dirExists) {
+          await window.electronAPI.createDirectory(dir);
         }
+
         // Cancel previous request if any
         if (this.stationsRequest) {
           this.stationsRequest.cancel('Canceling stations request');
@@ -381,10 +430,10 @@
         }
         // console.log(wmaNames[0]);
         let invertUrl = `${self.invertAPI}?wma=${wmaNames.join()}`;
-        
+
 
         // console.log(invertUrl);
-        let invertFile = `${dir}/${invertUrl.hashCode()}.json`;
+        let invertFile = `${dir}/${hashCode(invertUrl)}.json`;
         // console.log(invertFile);
         // Check if online
         if (navigator.onLine) {
@@ -392,16 +441,17 @@
           if (self.stationsRequest) {
             cancelToken = self.stationsRequest.token;
           }
-          axios.get(invertUrl, { cancelToken: cancelToken }).then(response => {
+          axios.get(invertUrl, { cancelToken: cancelToken }).then(async response => {
             self.mapDashboardRef.loadInvertStationsToMap(response.data);
-            fs.writeFileSync(invertFile, JSON.stringify(response.data));
+            await window.electronAPI.writeFile(invertFile, JSON.stringify(response.data));
             self.createInvertTree(response.data);
           }).catch(error => {
             console.log(error);
           });
         } else {
-          if (fs.existsSync(invertFile)) {
-            let jsonData = fs.readFileSync(invertFile, 'utf-8');
+          const invertFileExists = await window.electronAPI.fileExists(invertFile);
+          if (invertFileExists) {
+            let jsonData = await window.electronAPI.readFile(invertFile);
             let stationsData = JSON.parse(jsonData);
             self.mapDashboardRef.loadInvertStationsToMap(stationsData);
             self.createInvertTree(stationsData);
@@ -410,7 +460,7 @@
         let hydroUrl = `${self.verifiedAPI}?wma=${wmaNames.join()}`;
 
         // console.log(url);
-        let hydroFile = `${dir}/${hydroUrl.hashCode()}.json`;
+        let hydroFile = `${dir}/${hashCode(hydroUrl)}.json`;
         // console.log(invertFile);
         // Check if online
         if (navigator.onLine) {
@@ -418,33 +468,24 @@
           if (self.stationsRequest) {
             cancelToken = self.stationsRequest.token;
           }
-          axios.get(hydroUrl, { cancelToken: cancelToken }).then(response => {
+          axios.get(hydroUrl, { cancelToken: cancelToken }).then(async response => {
             self.mapDashboardRef.loadHydroStationsToMap(response.data);
-            fs.writeFileSync(hydroFile, JSON.stringify(response.data));
+            await window.electronAPI.writeFile(hydroFile, JSON.stringify(response.data));
             self.createHydroTree(response.data);
           }).catch(error => {
             console.log(error);
           });
         } else {
-          if (fs.existsSync(hydroFile)) {
-            let jsonData = fs.readFileSync(hydroFile, 'utf-8');
+          const hydroFileExists = await window.electronAPI.fileExists(hydroFile);
+          if (hydroFileExists) {
+            let jsonData = await window.electronAPI.readFile(hydroFile);
             let stationsData = JSON.parse(jsonData);
             self.mapDashboardRef.loadHydroStationsToMap(stationsData);
             self.createHydroTree(stationsData);
           }
         }
-        self.$bus.$on('stationSelectedFromMap', (station, isStationSelected) => {
-          self.hydroTreeRef.toggleNode(station, isStationSelected);
-        });
-        self.$bus.$on('stationSelectedFromMap', (station, isStationSelected) => {
-          self.invertTreeRef.toggleNode(station, isStationSelected);
-        });
-        self.$bus.$on('refreshStations', () => {
-          self.fetchStations();
-        });
-        self.$bus.$on('addStationsToStore', (stations, chartStoredId) => {
-          self.addStationsToStore(stations, chartStoredId);
-        });
+        // Note: Event listeners are registered once in mounted() using busOn for auto-cleanup
+        // No need to register them here to avoid duplicate listeners
         stateStore.getState(
           stateStore.keys.dateEnd,
           function (dateEnd) {
@@ -589,6 +630,7 @@
         let treeData = self.generateInvertTreeData(invertData);
         this.invertTreeRef.createTree(treeData, this.onInvertTreeSelectedHandler, this.onInvertTreeReady);
       },
+      // Raw callback for createTree (receives event, data directly)
       onInvertTreeReady (event, data) {
         const self = this;
         stateStore.getState(
@@ -600,6 +642,10 @@
             self.invertTreeRef.toggleMultipleNodes(selectedInvert, true);
           }
         );
+      },
+      // Component event handler (receives { event, data } object)
+      onInvertTreeReadyHandler ({ event, data }) {
+        this.onInvertTreeReady(event, data);
       },
       generateInvertTreeData (dictionary) {
         let treeData = [];
@@ -621,6 +667,7 @@
         });
         return treeData;
       },
+      // Raw callback for createTree (receives event, data directly)
       onInvertTreeSelectedHandler (event, data) {
         // On catchment tree clicked
         let i = [];
@@ -650,6 +697,10 @@
         this.mapDashboardRef.selectInvert(selectedInvert);
         this.loadFamily(_selectedInvertStations);
       },
+      // Component event handler (receives { event, data } object)
+      onInvertTreeClickedHandler ({ event, data }) {
+        this.onInvertTreeSelectedHandler(event, data);
+      },
       createHydroTree (stationsData) {
         let self = this;
         // Start adding stations data to catchment
@@ -673,6 +724,7 @@
         let treeData = self.generateHydroTreeData(hydroData);
         this.hydroTreeRef.createTree(treeData, this.onHydroTreeSelectedHandler, this.onHydroTreeReady);
       },
+      // Raw callback for createTree (receives event, data directly)
       onHydroTreeReady (event, data) {
         const self = this;
         stateStore.getState(
@@ -684,6 +736,10 @@
             self.hydroTreeRef.toggleMultipleNodes(selectedHydro, true);
           }
         );
+      },
+      // Component event handler (receives { event, data } object)
+      onHydroTreeReadyHandler ({ event, data }) {
+        this.onHydroTreeReady(event, data);
       },
       generateHydroTreeData (dictionary) {
         let treeData = [];
@@ -705,6 +761,7 @@
         });
         return treeData;
       },
+      // Raw callback for createTree (receives event, data directly)
       onHydroTreeSelectedHandler (event, data) {
         // On catchment tree clicked
         let i = [];
@@ -732,6 +789,17 @@
         this.selectedHydroStations = _selectedHydroStations;
         stateStore.setState(stateStore.keys.selectedHydro, this.selectedHydroStations);
         this.mapDashboardRef.selectHydro(selectedHydro);
+      },
+      // Component event handler (receives { event, data } object)
+      onHydroTreeClickedHandler ({ event, data }) {
+        this.onHydroTreeSelectedHandler(event, data);
+      },
+      // Helper method to format dates
+      formatDate (date) {
+        const dd = String(date.getDate()).padStart(2, '0');
+        const mm = String(date.getMonth() + 1).padStart(2, '0');
+        const yyyy = date.getFullYear();
+        return yyyy + '-' + mm + '-' + dd;
       }
     }
   };

@@ -21,13 +21,13 @@
   import $ from 'jquery';
   import 'jstree/dist/themes/default/style.min.css';
   import 'jstree/dist/jstree.min.js';
-
+ 
   export default {
     data () {
       return {
         selectable: true,
         loading: true,
-        refreshable: true
+        refreshable: true 
       };
     },
     methods: {
@@ -38,18 +38,39 @@
       },
       refreshStations () {
         this.loading = true;
-        this.$bus.$emit('refreshStations');
+        this.$bus.emit('refreshStations');
       },
       toggleNode (node, selected) {
-        let nodeBehaviour = selected ? 'select_node' : 'deselect_node';
         let $jsTreeDiv = $('#biotree-div');
-        if (!$jsTreeDiv) {
+        if (!$jsTreeDiv || !$jsTreeDiv.length) {
           return false;
         }
-        $jsTreeDiv.jstree(nodeBehaviour, node);
-        let nodes = $jsTreeDiv.jstree(true).get_node(node, true);
-        if (nodes) {
-          nodes.children('.jstree-anchor').focus();
+        // Check if jstree is initialized
+        let jsTreeInstance = $jsTreeDiv.jstree(true);
+        if (!jsTreeInstance || typeof jsTreeInstance.get_node !== 'function') {
+          return false;
+        }
+        // Get the node object to check if it exists
+        let nodeObj = jsTreeInstance.get_node(node);
+        if (!nodeObj) {
+          console.warn('Node not found in tree:', node);
+          return false;
+        }
+        // Open parent nodes if collapsed so the node is visible
+        let parent = jsTreeInstance.get_parent(node);
+        if (parent && parent !== '#') {
+          jsTreeInstance.open_node(parent);
+        }
+        // Use jstree instance methods to properly trigger events
+        // select_node(obj, supress_event, prevent_open) - we want supress_event=false to trigger changed.jstree
+        if (selected) {
+          jsTreeInstance.select_node(node, false, false);
+        } else {
+          jsTreeInstance.deselect_node(node, false);
+        }
+        let nodeElement = jsTreeInstance.get_node(node, true);
+        if (nodeElement && nodeElement.length) {
+          nodeElement.children('.jstree-anchor').focus();
         }
       },
       expandAll () {

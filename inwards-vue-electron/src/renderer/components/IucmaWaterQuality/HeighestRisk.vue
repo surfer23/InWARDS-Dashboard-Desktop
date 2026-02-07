@@ -111,7 +111,7 @@
         },
         methods: {
           showRiskTable (url_parameters) {
-            this.$http.get('https://inwards.award.org.za/app_json/wq_dash/all_sites.php?'+url_parameters)
+            this.$axios.get('https://inwards.award.org.za/app_json/wq_dash/all_sites.php?'+url_parameters)
               .then(
                 response => {
                   this.allRisk = response.data;

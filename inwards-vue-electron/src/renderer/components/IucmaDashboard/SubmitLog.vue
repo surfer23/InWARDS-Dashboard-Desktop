@@ -114,10 +114,15 @@
 </template>
 <script>
 import $ from 'jquery';
-const { dialog } = require('electron').remote;
-const { remote } = require('electron');
-const path = require("path");
+import { remote } from '../../services/electron-compat';
+const { dialog } = remote;
 import stateStore from '../../store/state_handler';
+
+// Helper function to get filename from path (replaces path.basename)
+function getBasename(filePath) {
+  if (!filePath) return '';
+  return filePath.split(/[\\/]/).pop();
+}
 export default {
     data: function() {
         return {
@@ -153,7 +158,7 @@ export default {
         
         
         this.file = this.$refs.file.files[0];
-        this.fileName = path.basename(this.file.path);
+        this.fileName = getBasename(this.file.path);
         document.getElementById("fileSelected").value = this.fileName;
 
 

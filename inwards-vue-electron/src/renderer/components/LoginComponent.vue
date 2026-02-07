@@ -457,7 +457,7 @@ export default {
   },
   mounted() {
     let self = this
-    this.$bus.$on('databaseValidated', () => {
+    this.$bus.on('databaseValidated', () => {
       // Check user login status
       if (!this.isLoggedIn) {
         //console.log('Check user login status in local store');

@@ -1,4 +1,6 @@
 .DS_Store
+claude_md/*
+.claude/*
 dist/electron/*
 dist/web/*
 build/*

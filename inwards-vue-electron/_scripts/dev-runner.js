@@ -1,5 +1,4 @@
 process.env.NODE_ENV = 'development'
-// process.env.ELECTRON_ENABLE_LOGGING = true
 
 const chalk = require('chalk')
 const electron = require('electron')
@@ -19,7 +18,6 @@ let manualRestart = null
 const remoteDebugging = process.argv.includes('--remote-debug')
 
 if (remoteDebugging) {
-  // disable dvtools open in electron
   process.env.RENDERER_REMOTE_DEBUGGING = true
 }
 
@@ -28,7 +26,6 @@ async function killElectron(pid) {
     if (pid) {
       kill(pid, 'SIGKILL', (err) => {
         if (err) reject(err)
-
         resolve()
       })
     } else {
@@ -43,12 +40,16 @@ async function restartElectron() {
   const { pid } = electronProcess || {}
   await killElectron(pid)
 
-  electronProcess = spawn(electron, [
+  const args = [
     path.join(__dirname, '../dist/main.js'),
-    // '--enable-logging', // Enable to show logs from all electron processes
-    remoteDebugging ? '--inspect=9222' : '',
-    remoteDebugging ? '--remote-debugging-port=9223' : '',
-  ])
+  ]
+
+  if (remoteDebugging) {
+    args.push('--inspect=9222')
+    args.push('--remote-debugging-port=9223')
+  }
+
+  electronProcess = spawn(electron, args.filter(Boolean))
 
   electronProcess.stdout.on('data', (data) => {
     console.log(chalk.white(data.toString()))
@@ -108,7 +109,7 @@ function startMain() {
   )
 }
 
-function startRenderer(callback) {
+async function startRenderer(callback) {
   const compiler = webpack(rendererConfig)
   const { name } = compiler
 
@@ -117,27 +118,33 @@ function startRenderer(callback) {
     console.log(chalk.gray(`\nWatching file changes for ${name} script...`))
   })
 
-  const server = new WebpackDevServer(compiler, {
-    contentBase: path.join(__dirname, '../'),
+  // webpack-dev-server v4 configuration
+  const server = new WebpackDevServer({
+    static: {
+      directory: path.join(__dirname, '../'),
+    },
     hot: true,
-    noInfo: true,
-    overlay: true,
-    clientLogLevel: 'warning',
+    client: {
+      logging: 'warn',
+      overlay: true,
+    },
     historyApiFallback: {
       disableDotRule: true,
-    }
-/*     headers: {
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, PATCH, OPTIONS",
-      "Access-Control-Allow-Headers": "X-Requested-With, content-type, Authorization"
-    } */
-  })
+    },
+    port: 9080,
+    host: 'localhost',
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+    },
+  }, compiler)
 
-  server.listen(9080, '', (err) => {
-    if (err) console.error(chalk.red(err))
-
+  try {
+    await server.start()
+    console.log(chalk.green('\nRenderer dev server running on http://localhost:9080'))
     callback()
-  })
+  } catch (err) {
+    console.error(chalk.red('Failed to start renderer dev server:'), err)
+  }
 }
 
 startRenderer(startMain)

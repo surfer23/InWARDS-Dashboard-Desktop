@@ -27,7 +27,7 @@
       };
     },
     created () {
-      this.$http.get('https://inwards.award.org.za/app_json/tpc_compliance.php')
+      this.$axios.get('https://inwards.award.org.za/app_json/tpc_compliance.php')
         .then(
           response => {
             this.stations = response.data;

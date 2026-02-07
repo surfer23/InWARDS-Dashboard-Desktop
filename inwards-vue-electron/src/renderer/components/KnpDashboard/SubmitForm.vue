@@ -100,9 +100,8 @@
   </template>
   <script>
   import $ from 'jquery';
-  const { dialog } = require('electron').remote;
-  const { remote } = require('electron');
-  const path = require("path");
+  import { remote } from '../../services/electron-compat';
+  const { dialog } = remote;
   import stateStore from '../../store/state_handler';
   export default {
     data: function() {
@@ -129,7 +128,7 @@
             console.log(this.userCode);
         }
         );
-        this.$http.get('https://inwards.award.org.za/app_json/stations_all.php')
+        this.$axios.get('https://inwards.award.org.za/app_json/stations_all.php')
         .then(
           response => {
             this.stations = response.data;
@@ -138,7 +137,7 @@
         .catch(function (error) {
           console.log(error);
         });
-        this.$http.get('https://inwards.award.org.za/app_json/gauge_heights.php')
+        this.$axios.get('https://inwards.award.org.za/app_json/gauge_heights.php')
         .then(
           response => {
             this.gaugeHeights = response.data;
@@ -219,7 +218,7 @@
         let siteCode = stationSplit[0];
         let heightPlate = this.selectedGaugeHeight;
         console.log('https://inwards.award.org.za/app_json/plate_convert.php?station='+siteCode+'&height='+heightPlate);
-        this.$http.get('https://inwards.award.org.za/app_json/plate_convert.php?station='+siteCode+'&height='+heightPlate)
+        this.$axios.get('https://inwards.award.org.za/app_json/plate_convert.php?station='+siteCode+'&height='+heightPlate)
         .then(
           response => {
             this.discharge = response.data;

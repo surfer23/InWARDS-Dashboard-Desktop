@@ -1,33 +1,32 @@
+'use strict';
 
-// 'use strict';
-import { app, BrowserWindow, Menu, MenuItem, ipcMain, dialog  } from 'electron';
+const { app, BrowserWindow, Menu, MenuItem, ipcMain, dialog } = require('electron');
+const path = require('path');
 const fs = require('fs');
-//import { setupTitlebar, attachTitlebarToWindow } from "custom-electron-titlebar";
-import installExtension, { VUEJS_DEVTOOLS } from 'electron-devtools-installer';
-const { setupTitlebar, attachTitlebarToWindow } = require('custom-electron-titlebar/main');
-//app.commandLine.appendSwitch('disable-site-isolation-trials')
-//process.env.ELECTRON_DISABLE_SECURITY_WARNINGS = '1';
-//app.commandLine.appendSwitch('auto-detect', 'false');
-//app.commandLine.appendSwitch('no-proxy-server');
-require('@electron/remote/main').initialize()
+const https = require('https');
+const http = require('http');
 
-setupTitlebar();
-// set app name
-app.name = "INWARDS"
-// to hide deprecation message
-app.allowRendererProcessReuse = true
+// Set app name
+app.name = 'INWARDS';
 
-// disable electron warning
-process.env.ELECTRON_DISABLE_SECURITY_WARNINGS = false
+// Disable security warnings in development
+const isDev = process.env.NODE_ENV === 'development';
+const isDebug = process.argv.includes('--debug');
 
-const gotTheLock = app.requestSingleInstanceLock()
-const isDev = process.env.NODE_ENV === 'development'
-const isDebug = process.argv.includes('--debug')
-let mainWindow
+if (isDev) {
+  process.env.ELECTRON_DISABLE_SECURITY_WARNINGS = 'true';
+}
+
+let mainWindow = null;
+
+// ============================================
+// Application Menu
+// ============================================
 const menu = new Menu();
+
 menu.append(new MenuItem({
   label: 'Home',
-  click: () => realTime('home')
+  click: () => navigateTo('home')
 }));
 
 menu.append(new MenuItem({
@@ -35,212 +34,375 @@ menu.append(new MenuItem({
   submenu: [
     {
       label: 'Real-time Discharge',
-      click: () => realTime('unverified')
+      click: () => navigateTo('unverified')
     },
-    {
-      type: 'separator'
-    },
+    { type: 'separator' },
     {
       label: 'Verified Discharge',
-      click: () => realTime('home')
+      click: () => navigateTo('home')
     },
+    { type: 'separator' },
     {
-      type: 'separator'
+      label: 'Dam Dashboard',
+      click: () => navigateTo('damDash')
     },
+    { type: 'separator' },
     {
       label: 'Kruger National Park (KNP) TPC Dashboard',
-      click: () => realTime('knpDash')
+      click: () => navigateTo('knpDash')
     },
-    {
-      type: 'separator'
-    },
+    { type: 'separator' },
     {
       label: 'IUCMA Operational Dashboard',
-      click: () => realTime('iucmaDash')
+      click: () => navigateTo('iucmaDash')
     },
+    { type: 'separator' },
     {
-      type: 'separator'
+      label: 'IUCMA RQO Dashboard',
+      click: () => navigateTo('iucmaWqDash')
     },
+    { type: 'separator' },
     {
       label: 'Water Quality Dashboard',
-      click: () => realTime('wqDash')
+      click: () => navigateTo('wqDash')
     },
+    { type: 'separator' },
     {
-      type: 'separator'
+      label: 'Water Quality Health Dashboard',
+      click: () => navigateTo('healthDash')
     },
+    { type: 'separator' },
     {
       label: 'Fish Dashboard',
-      click: () => realTime('fishDash')
+      click: () => navigateTo('fishDash')
     },
+    { type: 'separator' },
     {
-      type: 'separator'
+      label: 'Fishtrac Dashboard',
+      click: () => navigateTo('fishtracDash')
+    },
+    { type: 'separator' },
+    {
+      label: 'Invertebrate Dashboard',
+      click: () => navigateTo('invertDash')
+    },
+    { type: 'separator' },
+    {
+      label: 'Load Dashboard',
+      click: () => navigateTo('loadDash')
+    },
+    { type: 'separator' },
+    {
+      label: 'Spatial Risk Dashboard',
+      click: () => navigateTo('ebaDash')
     }
   ]
 }));
+
 menu.append(new MenuItem({
   label: 'Your Dashboard',
-  click: () => realTime('userDash')
+  click: () => navigateTo('userDash')
 }));
+
 menu.append(new MenuItem({
   label: 'Options',
   submenu: [
     {
       label: 'Admin Dashboard',
-      click: () => realTime('adminDash')
+      click: () => navigateTo('adminDash')
     },
     {
       label: 'Reset Application',
-      click: () => realTime('reset')
+      click: () => navigateTo('reset')
     }
   ]
 }));
 
+// ============================================
+// Single Instance Lock
+// ============================================
+const gotTheLock = app.requestSingleInstanceLock();
 
+if (!gotTheLock && !isDev) {
+  app.quit();
+  process.exit(0);
+}
 
-// only allow single instance of application
-if (!isDev) {
-  if (gotTheLock) {
-    app.on('second-instance', () => {
-      // Someone tried to run a second instance, we should focus our window.
-      if (mainWindow && mainWindow.isMinimized()) {
-        mainWindow.restore()
-      }
-      mainWindow.focus()
-    })
-  } else {
-    app.quit()
-    process.exit(0)
+app.on('second-instance', () => {
+  if (mainWindow) {
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.focus();
   }
-} else {
-  // process.env.ELECTRON_ENABLE_LOGGING = true
+});
 
-  require('electron-debug')({
-    showDevTools: false,
-  })
-}
+// ============================================
+// IPC Handlers
+// ============================================
 
-async function installDevTools() {
-  app.whenReady().then(() => {
-    installExtension(VUEJS_DEVTOOLS, { loadExtensionOptions: { allowFileAccess: true } })
-        .then((name) => console.log(`Added Extension:  ${name}`))
-        .catch((err) => console.log('An error occurred: ', err));
+// Path handlers
+ipcMain.handle('get-user-data-path', () => {
+  return app.getPath('userData');
+});
 
-  })
-}
+ipcMain.handle('get-app-path', () => {
+  return app.getAppPath();
+});
 
-function createWindow() {
+ipcMain.handle('get-database-path', () => {
+  return path.join(app.getPath('userData'), 'inwards_template.sqlite3');
+});
 
-      mainWindow = new BrowserWindow({
-        backgroundColor: '#fff',
-        width: 960,
-        height: 540,
-        minWidth: 960,
-        minHeight: 540,
-        setFullScreen: true,
-        useContentSize: true,
-        frame: false,
-        titleBarStyle: 'hidden',
-        webPreferences: {
-          nodeIntegration: true,
-          enableRemoteModule: true,
-          nodeIntegrationInWorker: false,
-          contextIsolation: false,
-          webSecurity: false,
-        }
-      })
-    Menu.setApplicationMenu(menu);
-    if (isDev) {
-      mainWindow.loadURL('http://localhost:9080')
-      mainWindow.on('closed', () => {
-        mainWindow = null;
-      });
+ipcMain.handle('get-nedb-path', () => {
+  return path.join(app.getPath('userData'), 'data.db');
+});
+
+// File system handlers
+ipcMain.handle('file-exists', async (event, filePath) => {
+  try {
+    await fs.promises.access(filePath, fs.constants.F_OK);
+    return true;
+  } catch {
+    return false;
+  }
+});
+
+ipcMain.handle('read-file', async (event, filePath) => {
+  try {
+    const data = await fs.promises.readFile(filePath);
+    return data;
+  } catch (error) {
+    console.error('Error reading file:', error);
+    throw error;
+  }
+});
+
+ipcMain.handle('write-file', async (event, filePath, data) => {
+  try {
+    // Ensure directory exists
+    const dir = path.dirname(filePath);
+    await fs.promises.mkdir(dir, { recursive: true });
+    await fs.promises.writeFile(filePath, Buffer.from(data));
+    return true;
+  } catch (error) {
+    console.error('Error writing file:', error);
+    throw error;
+  }
+});
+
+ipcMain.handle('delete-file', async (event, filePath) => {
+  try {
+    await fs.promises.unlink(filePath);
+    return true;
+  } catch (error) {
+    console.error('Error deleting file:', error);
+    throw error;
+  }
+});
+
+// Window control handlers
+ipcMain.handle('window-minimize', () => {
+  if (mainWindow) mainWindow.minimize();
+});
+
+ipcMain.handle('window-maximize', () => {
+  if (mainWindow) {
+    if (mainWindow.isMaximized()) {
+      mainWindow.unmaximize();
     } else {
-      mainWindow.loadFile(`${__dirname}/index.html`)
-      global.__static = require('path')
-        .join(__dirname, '/static')
-        .replace(/\\/g, '\\\\')
+      mainWindow.maximize();
     }
-    mainWindow.on('ready-to-show', () => {
-      mainWindow.show()
-      mainWindow.focus()
-    })
-    mainWindow.on('closed', () => {
-      console.log('\nApplication exiting...')
-    })
-    mainWindow.maximize();
-}
+  }
+});
 
-app.on('ready', () => {
-  createWindow()
+ipcMain.handle('window-close', () => {
+  if (mainWindow) mainWindow.close();
+});
+
+ipcMain.handle('window-is-maximized', () => {
+  return mainWindow ? mainWindow.isMaximized() : false;
+});
+
+// Dialog handlers
+ipcMain.handle('show-open-dialog', async (event, options) => {
+  const result = await dialog.showOpenDialog(mainWindow, options);
+  return result;
+});
+
+ipcMain.handle('show-save-dialog', async (event, options) => {
+  const result = await dialog.showSaveDialog(mainWindow, options);
+  return result;
+});
+
+ipcMain.handle('show-message-box', async (event, options) => {
+  const result = await dialog.showMessageBox(mainWindow, options);
+  return result;
+});
+
+// App info handlers
+ipcMain.handle('get-app-version', () => {
+  return app.getVersion();
+});
+
+// Database download handler
+ipcMain.handle('download-database', (event, url, destPath) => {
+  return new Promise((resolve, reject) => {
+    const protocol = url.startsWith('https') ? https : http;
+    const file = fs.createWriteStream(destPath);
+
+    protocol.get(url, (response) => {
+      if (response.statusCode === 302 || response.statusCode === 301) {
+        // Handle redirect
+        protocol.get(response.headers.location, (redirectResponse) => {
+          redirectResponse.pipe(file);
+          file.on('finish', () => {
+            file.close();
+            resolve(true);
+          });
+        }).on('error', (err) => {
+          fs.unlink(destPath, () => {}); // Delete the file on error
+          reject(err);
+        });
+      } else {
+        response.pipe(file);
+        file.on('finish', () => {
+          file.close();
+          resolve(true);
+        });
+      }
+    }).on('error', (err) => {
+      fs.unlink(destPath, () => {}); // Delete the file on error
+      reject(err);
+    });
+  });
+});
+
+// ============================================
+// Window Creation
+// ============================================
+function createWindow() {
+  // Get the correct preload path
+  // In dev: __dirname is dist/, preload is at dist/preload.js
+  // In prod: same, preload is bundled to dist/preload.js
+  const preloadPath = path.join(__dirname, 'preload.js');
+  console.log('Preload path:', preloadPath);
+
+  mainWindow = new BrowserWindow({
+    backgroundColor: '#1E1E1E',
+    width: 1600,
+    height: 900,
+    minWidth: 960,
+    minHeight: 540,
+    frame: false,
+    titleBarStyle: 'hidden',
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      sandbox: false, // Required for preload to access Node APIs
+      preload: preloadPath,
+      webSecurity: !isDev, // Allow file:// in dev only
+    }
+  });
+
+  Menu.setApplicationMenu(menu);
+
   if (isDev) {
-    installDevTools()
-    mainWindow.webContents.on("did-frame-finish-load", () => {
-      mainWindow.webContents.once("devtools-opened", () => {
-      });
+    mainWindow.loadURL('http://localhost:9080');
+  } else {
+    mainWindow.loadFile(path.join(__dirname, 'index.html'));
+  }
+
+  mainWindow.on('ready-to-show', () => {
+    mainWindow.show();
+    mainWindow.focus();
+  });
+
+  mainWindow.on('closed', () => {
+    console.log('\nApplication exiting...');
+    mainWindow = null;
+  });
+
+  mainWindow.maximize();
+
+  // Open DevTools in development
+  if (isDev) {
+    mainWindow.webContents.on('did-frame-finish-load', () => {
       setTimeout(() => {
         mainWindow.webContents.openDevTools({ mode: 'right' });
       }, 3000);
     });
   }
+
   if (isDebug) {
     setTimeout(() => {
       mainWindow.webContents.openDevTools();
     }, 3000);
   }
-  if (!isDebug || !isDev){
-    mainWindow.show()
-    mainWindow.focus();
+}
+
+// Navigation helper - sends IPC message to renderer
+function navigateTo(target) {
+  if (mainWindow && mainWindow.webContents) {
+    mainWindow.webContents.send('change-view', { route: getRouteForTarget(target) });
   }
-})
+}
+
+// Map menu targets to routes
+function getRouteForTarget(target) {
+  const routes = {
+    'home': '/',
+    'unverified': '/dashboard',
+    'damDash': '/dam-dashboard',
+    'knpDash': '/knp-dashboard',
+    'iucmaDash': '/iucma-dashboard',
+    'iucmaWqDash': '/iucma-wq-dashboard',
+    'wqDash': '/wq-dashboard',
+    'healthDash': '/wq-health-dashboard',
+    'fishDash': '/fish-dashboard',
+    'fishtracDash': '/fishtrac-dashboard',
+    'invertDash': '/invert-dashboard',
+    'loadDash': '/load-dashboard',
+    'ebaDash': '/eba-dashboard',
+    'userDash': '/user-dashboard',
+    'adminDash': '/admin-dashboard',
+    'reset': '/reset'
+  };
+  return routes[target] || '/';
+}
+
+// ============================================
+// App Lifecycle
+// ============================================
+app.on('ready', () => {
+  createWindow();
+});
+
 app.on('activate', () => {
-  if (BrowserWindow.getAllWindows().length === 0) createWindow();
-  if (mainWindow === null) {
-    createWindow()
+  if (BrowserWindow.getAllWindows().length === 0) {
+    createWindow();
   }
-})
+});
+
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
-    app.quit()
+    app.quit();
   }
-})
+});
 
-function realTime (dash) {
-  // mainWindow.webContents.send('goToKnpDashboard', 'Yay');
-  mainWindow.webContents.executeJavaScript(`document.getElementById('` + dash + `').click();`);
-}
-/**
- * Auto Updater
- *
- * Uncomment the following code below and install `electron-updater` to
- * support auto updating. Code Signing with a valid certificate is required.
- * https://simulatedgreg.gitbooks.io/electron-vue/content/en/using-electron-builder.html#auto-updating
- */
+// ============================================
+// Auto Updater (uncomment when ready)
+// ============================================
+/*
+const { autoUpdater } = require('electron-updater');
 
-/* autoUpdater.on('update-available', () => {
-  mainWindow.webContents.send('update_available')
-})
+autoUpdater.on('update-available', () => {
+  mainWindow.webContents.send('update_available');
+});
 
 autoUpdater.on('update-downloaded', () => {
-  mainWindow.webContents.send('update_downloaded')
-})
- */
-/* ipcMain.on('restart_app', () => {
-  autoUpdater.quitAndInstall()
-})
-ipcMain.handle('get-user-data-path', () => {
-  return app.getPath('userData')
-})
-ipcMain.handle('get-app-path', () => {
-  return app.getPath('userData')
-})
-ipcMain.handle('show-message-box', async (event, options) => {
-  const result = await dialog.showMessageBox(null, options)
-  return result
-})
-ipcMain.handle('open-dialog', async (event, options) => {
-  const result = await dialog.showOpenDialog(options)
-  return result
-})
-ipcMain.handle('get-app-data-path', async () => {
-  return app.getPath('userData')
-}) */
+  mainWindow.webContents.send('update_downloaded');
+});
+
+ipcMain.on('restart_app', () => {
+  autoUpdater.quitAndInstall();
+});
+*/

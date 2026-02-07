@@ -78,7 +78,7 @@
 }
 </style>
 <script type="text/javascript">
-import $ from 'jquery'
+import axios from 'axios'
 export default {
   data() {
     return {
@@ -87,7 +87,7 @@ export default {
     }
   },
   mounted() {
-    this.$http
+    axios
       .get(
         'https://inwards.award.org.za/app_json/wq_dash/rqos/compliance_table.php?stations=X2I050&sd=1972-12-10&ed=2022-11-28&type=0&variable=ECOLI_Susp_Water&unit=mg%2FL&merge=true&type=Rivers'
       )

@@ -13,10 +13,32 @@
           </nav>
           <div class="tab-content py-3 px-3 px-sm-0" id="nav-tabContent">
             <div class="tab-pane fade show active" id="tabs-1" role="tabpanel">
-              <BioTree ref="bioTree"/>
+              <!-- BioTree using BaseCatchmentTree with unique ID -->
+              <BaseCatchmentTree
+                ref="bioTree"
+                tree-id="fish-bio-sites"
+                title=""
+                :refreshable="false"
+                :selectable="true"
+                :search-enabled="true"
+                container-height="300px"
+                @tree-clicked="onBioTreeClickedHandler"
+                @tree-ready="onBioTreeReadyHandler"
+              />
             </div>
             <div class="tab-pane fade" id="tabs-2" role="tabpanel">
-              <HydroTree ref="hydroTree"/>
+              <!-- HydroTree using BaseCatchmentTree with unique ID -->
+              <BaseCatchmentTree
+                ref="hydroTree"
+                tree-id="fish-hydro-sites"
+                title=""
+                :refreshable="false"
+                :selectable="true"
+                :search-enabled="true"
+                container-height="300px"
+                @tree-clicked="onHydroTreeClickedHandler"
+                @tree-ready="onHydroTreeReadyHandler"
+              />
             </div>
           </div>
           <div class="v-space"></div>
@@ -256,8 +278,8 @@
   import JulianMax from './JulianMax';
   import JulianMin from './JulianMin';
   import BaseFlowIndex from './BaseFlowIndex';
-  import BioTree from './BioTree';
-  import HydroTree from './HydroTree';
+  // Import base component for trees
+  import BaseCatchmentTree from '../shared/BaseCatchmentTree.vue';
   import stateStore from '../../store/state_handler';
   import VectorLayer from 'ol/layer/Vector';
   import VectorSource from 'ol/source/Vector';
@@ -267,11 +289,47 @@
   import {Fill, Stroke, Style} from 'ol/style';
   import { GridLoader } from 'vue-spinner/dist/vue-spinner.min.js';
   import $ from 'jquery';
-  import path from 'path';
-  const { dialog, app } = require('electron').remote;
+  import { remote } from '../../services/electron-compat';
+  // Import the event bus composable for automatic cleanup
+  import { useEventBus } from '../../composables/useEventBus';
+  const { dialog, app } = remote;
   require('promise.prototype.finally').shim();
 
   export default {
+    name: 'FishDashboard',
+
+    components: {
+      Header,
+      NavButtons,
+      MapDashboard,
+      GridLoader,
+      BaseCatchmentTree,
+      Multiselect,
+      SiteOverview,
+      StatusBar,
+      FishTimeseries,
+      HighPulse,
+      MonthlyMeans,
+      ZeroFlows,
+      JulianMax,
+      JulianMin,
+      HighFlowDuration,
+      ExtremeLowPulses,
+      ExtremeLowDuration,
+      BaseFlowIndex,
+      LowFlowTimeseries,
+      HighFlowTimeseries,
+      FishBox,
+      FishDuration,
+      FishRadar
+    },
+
+    setup() {
+      // Use the event bus composable - listeners will be auto-cleaned on unmount
+      const { on, emit } = useEventBus();
+      return { busOn: on, busEmit: emit };
+    },
+
     data () {
       return {
         fishAPI: 'https://inwards.award.org.za/app_json/fish_sites.php',
@@ -294,11 +352,21 @@
         radius: '2px'
       };
     },
+
+    computed: {
+      mapDashboardRef() {
+        return this.$refs.mapDashboard;
+      },
+      bioTreeRef() {
+        return this.$refs.bioTree;
+      },
+      hydroTreeRef() {
+        return this.$refs.hydroTree;
+      }
+    },
+
     mounted () {
       let self = this;
-      self.mapDashboardRef = self.$refs.mapDashboard;
-      self.bioTreeRef = self.$refs.bioTree;
-      self.hydroTreeRef = self.$refs.hydroTree;
       stateStore.getState(
         stateStore.keys.selectedWMAs,
         function (selectedWMAs) {
@@ -309,21 +377,22 @@
             return false;
           }
           self.selectedWMAs = selectedWMAs;
-          // console.log(selectedWMAs);
           self.mapDashboardRef.showSelectedWMA(selectedWMAs);
           self.fetchStations();
         }
       );
-      self.$bus.$on('stationSelectedFromMap', (station, isStationSelected) => {
-        self.bioTreeRef.toggleNode(station, isStationSelected);
+      // Use busOn for automatic cleanup on unmount
+      self.busOn('stationSelectedFromMap', (payload) => {
+        const { station, selected } = payload;
+        self.bioTreeRef.toggleNode(station, selected);
+        self.hydroTreeRef.toggleNode(station, selected);
       });
-      self.$bus.$on('stationSelectedFromMap', (station, isStationSelected) => {
-        self.hydroTreeRef.toggleNode(station, isStationSelected);
-      });
-      self.$bus.$on('refreshStations', () => {
+      self.busOn('refreshStations', () => {
         self.fetchStations();
       });
-      self.$bus.$on('addStationsToStore', (stations, chartStoredId) => {
+      self.busOn('addStationsToStore', (payload) => {
+        // Mitt only passes one argument
+        const { stations, chartStoredId } = payload;
         self.addStationsToStore(stations, chartStoredId);
       });
       let map = this.$refs.mapDashboard.map;
@@ -340,37 +409,9 @@
       }
       startDate = yyyy + '-' + mm + '-' + dd;
       document.getElementById('dateStart').setAttribute('value', startDate);
-      this.bioTreeRef.refreshStations();
-      this.hydroTreeRef.refreshStations();
       self.fetchStations();
       self.addKnpLayer(map);
       this.loading = false;
-    },
-    components: {
-      Header,
-      NavButtons,
-      MapDashboard,
-      GridLoader,
-      BioTree,
-      HydroTree,
-      Multiselect,
-      SiteOverview,
-      StatusBar,
-      FishTimeseries,
-      HighPulse,
-      MonthlyMeans,
-      ZeroFlows,
-      JulianMax,
-      JulianMin,
-      HighFlowDuration,
-      ExtremeLowPulses,
-      ExtremeLowDuration,
-      BaseFlowIndex,
-      LowFlowTimeseries,
-      HighFlowTimeseries,
-      FishBox,
-      FishDuration,
-      FishRadar
     },
     methods: {
       showSelectMap () {
@@ -436,15 +477,22 @@
         this.$refs.monthlyComponent.displayChart(this.selectedHydroStations, this.selectedBioStations, this.formatDate(dateStart), this.formatDate(dateEnd), this.selectedSpecies);
         this.loading = false;
       },
-      fetchStations () {
+      async fetchStations () {
         let self = this;
         let wmaNames = Object.assign([], self.selectedWMAs);
         // console.log(self.selectedWMAs);
-        let fs = require('fs');
-        let dir = path.join(app.getPath('userData'), '/stations');
+
+        // Helper function to compute hash code for URL
+        const hashCode = (str) => str.split('').reduce((a, b) => { a = ((a << 5) - a) + b.charCodeAt(0); return a & a }, 0);
+
+        // Get userData path and set up stations directory
+        const userDataPath = await window.electronAPI.getUserDataPath();
+        const dir = userDataPath + '/stations';
+
         // TODO : Create an util class for file storage
-        if (!fs.existsSync(dir)) {
-          fs.mkdirSync(dir);
+        const dirExists = await window.electronAPI.fileExists(dir);
+        if (!dirExists) {
+          await window.electronAPI.mkdir(dir);
         }
         // Cancel previous request if any
         if (this.stationsRequest) {
@@ -460,7 +508,7 @@
         let bioUrl = `${self.fishAPI}?wma=${wmaNames.join()}`;
 
         console.log(bioUrl);
-        let bioFile = `${dir}/${bioUrl.hashCode()}.json`;
+        let bioFile = `${dir}/${hashCode(bioUrl)}.json`;
         // console.log(bioFile);
         // Check if online
         if (navigator.onLine) {
@@ -468,16 +516,17 @@
           if (self.stationsRequest) {
             cancelToken = self.stationsRequest.token;
           }
-          axios.get(bioUrl, { cancelToken: cancelToken }).then(response => {
+          axios.get(bioUrl, { cancelToken: cancelToken }).then(async response => {
             self.mapDashboardRef.loadBioStationsToMap(response.data);
-            fs.writeFileSync(bioFile, JSON.stringify(response.data));
+            await window.electronAPI.writeFile(bioFile, JSON.stringify(response.data));
             self.createBioTree(response.data);
           }).catch(error => {
             console.log(error);
           });
         } else {
-          if (fs.existsSync(bioFile)) {
-            let jsonData = fs.readFileSync(bioFile, 'utf-8');
+          const bioFileExists = await window.electronAPI.fileExists(bioFile);
+          if (bioFileExists) {
+            let jsonData = await window.electronAPI.readFile(bioFile);
             let stationsData = JSON.parse(jsonData);
             self.mapDashboardRef.loadBioStationsToMap(stationsData);
             self.createBioTree(stationsData);
@@ -486,7 +535,7 @@
         let hydroUrl = `${self.verifiedAPI}?wma=${wmaNames.join()}`;
 
         // console.log(url);
-        let hydroFile = `${dir}/${hydroUrl.hashCode()}.json`;
+        let hydroFile = `${dir}/${hashCode(hydroUrl)}.json`;
         // console.log(bioFile);
         // Check if online
         if (navigator.onLine) {
@@ -494,33 +543,24 @@
           if (self.stationsRequest) {
             cancelToken = self.stationsRequest.token;
           }
-          axios.get(hydroUrl, { cancelToken: cancelToken }).then(response => {
+          axios.get(hydroUrl, { cancelToken: cancelToken }).then(async response => {
             self.mapDashboardRef.loadHydroStationsToMap(response.data);
-            fs.writeFileSync(hydroFile, JSON.stringify(response.data));
+            await window.electronAPI.writeFile(hydroFile, JSON.stringify(response.data));
             self.createHydroTree(response.data);
           }).catch(error => {
             console.log(error);
           });
         } else {
-          if (fs.existsSync(hydroFile)) {
-            let jsonData = fs.readFileSync(hydroFile, 'utf-8');
+          const hydroFileExists = await window.electronAPI.fileExists(hydroFile);
+          if (hydroFileExists) {
+            let jsonData = await window.electronAPI.readFile(hydroFile);
             let stationsData = JSON.parse(jsonData);
             self.mapDashboardRef.loadHydroStationsToMap(stationsData);
             self.createHydroTree(stationsData);
           }
         }
-        self.$bus.$on('stationSelectedFromMap', (station, isStationSelected) => {
-          self.hydroTreeRef.toggleNode(station, isStationSelected);
-        });
-        self.$bus.$on('stationSelectedFromMap', (station, isStationSelected) => {
-          self.bioTreeRef.toggleNode(station, isStationSelected);
-        });
-        self.$bus.$on('refreshStations', () => {
-          self.fetchStations();
-        });
-        self.$bus.$on('addStationsToStore', (stations, chartStoredId) => {
-          self.addStationsToStore(stations, chartStoredId);
-        });
+        // Note: Event listeners are registered once in mounted() using busOn for auto-cleanup
+        // No need to register them here to avoid duplicate listeners
         stateStore.getState(
           stateStore.keys.dateEnd,
           function (dateEnd) {
@@ -665,6 +705,7 @@
         let treeData = self.generateBioTreeData(bioData);
         this.bioTreeRef.createTree(treeData, this.onBioTreeSelectedHandler, this.onBioTreeReady);
       },
+      // Raw callback for createTree (receives event, data directly)
       onBioTreeReady (event, data) {
         const self = this;
         stateStore.getState(
@@ -676,6 +717,10 @@
             self.bioTreeRef.toggleMultipleNodes(selectedBio, true);
           }
         );
+      },
+      // Component event handler (receives { event, data } object)
+      onBioTreeReadyHandler ({ event, data }) {
+        this.onBioTreeReady(event, data);
       },
       generateBioTreeData (dictionary) {
         let treeData = [];
@@ -697,6 +742,7 @@
         });
         return treeData;
       },
+      // Raw callback for createTree (receives event, data directly)
       onBioTreeSelectedHandler (event, data) {
         // On catchment tree clicked
         let i = [];
@@ -726,6 +772,10 @@
         this.mapDashboardRef.selectBio(selectedBio);
         this.loadSpecies(_selectedBioStations);
       },
+      // Component event handler (receives { event, data } object)
+      onBioTreeClickedHandler ({ event, data }) {
+        this.onBioTreeSelectedHandler(event, data);
+      },
       createHydroTree (stationsData) {
         let self = this;
         // Start adding stations data to catchment
@@ -749,6 +799,7 @@
         let treeData = self.generateHydroTreeData(hydroData);
         this.hydroTreeRef.createTree(treeData, this.onHydroTreeSelectedHandler, this.onHydroTreeReady);
       },
+      // Raw callback for createTree (receives event, data directly)
       onHydroTreeReady (event, data) {
         const self = this;
         stateStore.getState(
@@ -760,6 +811,10 @@
             self.hydroTreeRef.toggleMultipleNodes(selectedHydro, true);
           }
         );
+      },
+      // Component event handler (receives { event, data } object)
+      onHydroTreeReadyHandler ({ event, data }) {
+        this.onHydroTreeReady(event, data);
       },
       generateHydroTreeData (dictionary) {
         let treeData = [];
@@ -781,6 +836,7 @@
         });
         return treeData;
       },
+      // Raw callback for createTree (receives event, data directly)
       onHydroTreeSelectedHandler (event, data) {
         // On catchment tree clicked
         let i = [];
@@ -808,6 +864,17 @@
         this.selectedHydroStations = _selectedHydroStations;
         stateStore.setState(stateStore.keys.selectedHydro, this.selectedHydroStations);
         this.mapDashboardRef.selectHydro(selectedHydro);
+      },
+      // Component event handler (receives { event, data } object)
+      onHydroTreeClickedHandler ({ event, data }) {
+        this.onHydroTreeSelectedHandler(event, data);
+      },
+      // Helper method to format dates
+      formatDate (date) {
+        const dd = String(date.getDate()).padStart(2, '0');
+        const mm = String(date.getMonth() + 1).padStart(2, '0');
+        const yyyy = date.getFullYear();
+        return yyyy + '-' + mm + '-' + dd;
       }
     }
   };

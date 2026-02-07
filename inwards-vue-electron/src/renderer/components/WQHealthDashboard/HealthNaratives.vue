@@ -148,7 +148,7 @@
           },
           methods: {
             showNarativesTable (urlPara) {
-              this.$http.get('https://inwards.award.org.za/app_json/wq_dash/health/health_overview.php?'+urlPara)
+              this.$axios.get('https://inwards.award.org.za/app_json/wq_dash/health/health_overview.php?'+urlPara)
                 .then(
                   response => {
                     this.healthNara = response.data;

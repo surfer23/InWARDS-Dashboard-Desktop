@@ -7,7 +7,7 @@
         <span v-if="refreshable">
           <i
             class="fa fa-refresh"
-            id="refresh-stations"
+            :id="refreshButtonId"
             v-on:click="refreshStations"
             ref="refreshType"
           ></i>
@@ -23,8 +23,8 @@
         above...
       </div>
       <div v-else>
-        <div id="jstree-div" style="font-size: 11px">
-          <div id="jstree-sub-div" style="font-size: 11px"></div>
+        <div :id="treeContainerId" style="font-size: 11px">
+          <div :id="treeSubContainerId" style="font-size: 11px"></div>
         </div>
       </div>
     </div>
@@ -36,7 +36,7 @@
         <div class="input-group-prepend">
           <span
             class="input-group-text rounded-0 inwards_search"
-            id="search-addon"
+            :id="searchAddonId"
           >
             <font-awesome-icon icon="fa-solid fa-map-marked-alt" />
           </span>
@@ -44,14 +44,14 @@
         <input
           type="text"
           class="form-control rounded-0 inwards_label"
-          id="catchmentSearchInput"
-          aria-describedby="search-addon"
+          :id="searchInputId"
+          :aria-describedby="searchAddonId"
           placeholder="Search"
         />
         <div class="input-group-append">
           <span
             class="input-group-text rounded-0 inwards_search"
-            id="search-addon-append"
+            :id="searchAddonAppendId"
             style="cursor: pointer"
             role="button"
           >
@@ -71,11 +71,43 @@ import 'jstree/src/jstree.search.js'
 import 'jstree/dist/themes/default/style.css'
 
 export default {
+  name: 'StationTree',
+
+  props: {
+    treeId: {
+      type: String,
+      default: 'load-station-tree'
+    }
+  },
+
+  emits: ['refresh-requested'],
+
   data() {
     return {
       selectable: true,
       loading: true,
       refreshable: true,
+    }
+  },
+
+  computed: {
+    treeContainerId() {
+      return `jstree-${this.treeId}`
+    },
+    treeSubContainerId() {
+      return `jstree-sub-${this.treeId}`
+    },
+    searchInputId() {
+      return `search-${this.treeId}`
+    },
+    searchAddonId() {
+      return `search-addon-${this.treeId}`
+    },
+    searchAddonAppendId() {
+      return `search-addon-append-${this.treeId}`
+    },
+    refreshButtonId() {
+      return `refresh-${this.treeId}`
     }
   },
   methods: {
@@ -86,30 +118,51 @@ export default {
     },
     refreshStations() {
       this.loading = true
-      this.$bus.$emit('refreshStations')
+      this.$emit('refresh-requested')
+    },
+    setLoading(isLoading) {
+      this.loading = isLoading
     },
     toggleNode(node, selected) {
-      let nodeBehaviour = selected ? 'select_node' : 'deselect_node'
-      //console.log("NOT A DIV")
-      let $jsTreeDiv = $('#jstree-div')
-      if (!$jsTreeDiv) {
-        
+      let $jsTreeDiv = $(`#${this.treeContainerId}`)
+      if (!$jsTreeDiv || !$jsTreeDiv.length) {
         return false
       }
-      $jsTreeDiv.jstree(nodeBehaviour, node)
-      let nodes = $jsTreeDiv.jstree(true).get_node(node, true)
-      if (nodes) {
-        nodes.children('.jstree-anchor').focus()
+      // Check if jstree is initialized
+      let jsTreeInstance = $jsTreeDiv.jstree(true)
+      if (!jsTreeInstance || typeof jsTreeInstance.get_node !== 'function') {
+        return false
+      }
+      // Get the node object to check if it exists
+      let nodeObj = jsTreeInstance.get_node(node)
+      if (!nodeObj) {
+        console.warn('Node not found in tree:', node)
+        return false
+      }
+      // Open parent nodes if collapsed so the node is visible
+      let parent = jsTreeInstance.get_parent(node)
+      if (parent && parent !== '#') {
+        jsTreeInstance.open_node(parent)
+      }
+      // Use jstree instance methods to properly trigger events
+      // select_node(obj, supress_event, prevent_open) - we want supress_event=false to trigger changed.jstree
+      if (selected) {
+        jsTreeInstance.select_node(node, false, false)
+      } else {
+        jsTreeInstance.deselect_node(node, false)
+      }
+      let nodeElement = jsTreeInstance.get_node(node, true)
+      if (nodeElement && nodeElement.length) {
+        nodeElement.children('.jstree-anchor').focus()
       }
     },
     expandAll() {
-    let $jsTreeDiv = $('#jstree-div')
+      let $jsTreeDiv = $(`#${this.treeContainerId}`)
       $jsTreeDiv.jstree('open_all')
     },
     createStationTree(jsonData, treeClicked, treeReady) {
-      let jsTreePlugins = ['wholerow', 'types', 'search', 'checkbox'];
-
-
+      const self = this
+      let jsTreePlugins = ['wholerow', 'types', 'search', 'checkbox']
 
       this.loading = false
       let iconHydro = require('../../assets/river.svg')
@@ -117,8 +170,8 @@ export default {
       let iconRQO = require('../../assets/rqo.svg')
       let iconTree = require('../../assets/iconfinder_layer_37228.png')
       setTimeout(function () {
-        let $jsTreeDiv = $('#jstree-div')
-        let $searchInputDiv = $('#catchmentSearchInput')
+        let $jsTreeDiv = $(`#${self.treeContainerId}`)
+        let $searchInputDiv = $(`#${self.searchInputId}`)
         $jsTreeDiv.on('changed.jstree', treeClicked).jstree({
           core: {
             data: jsonData,

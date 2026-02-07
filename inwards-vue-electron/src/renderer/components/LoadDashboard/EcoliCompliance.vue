@@ -44,7 +44,7 @@
           },
           methods: {
             showRiskTable () {
-              this.$http.get('https://inwards.award.org.za/app_json/wq_dash/rqos/compliance_table.php?stations=X2I050&sd=1972-12-10&ed=2022-11-28&type=0&variable=ECOLI_Susp_Water&unit=mg%2FL&merge=true&type=Rivers')
+              this.$axios.get('https://inwards.award.org.za/app_json/wq_dash/rqos/compliance_table.php?stations=X2I050&sd=1972-12-10&ed=2022-11-28&type=0&variable=ECOLI_Susp_Water&unit=mg%2FL&merge=true&type=Rivers')
                 .then(
                   response => {
                     this.ecoliData = response.data;

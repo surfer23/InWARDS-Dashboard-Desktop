@@ -119,7 +119,7 @@ export default {
       let self = this;
       let stations = this.urlParameters['stations'];
       let chartStoreId = self.chartId + '-' + stations.join('-');
-      self.$bus.$emit('addStationsToStore', stations, chartStoreId);
+      self.$bus.emit('addStationsToStore', stations, chartStoreId);
       stateStore.getState(
         stateStore.keys.selectedCharts,
         function (selectedCharts) {

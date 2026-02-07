@@ -1,28 +1,30 @@
 <template>
-  <div class="card rounded-0 box" v-bind:style="styleObject">
-    <div class="card-header inwards_card">
-   <div class="row">
-    <div class="col-md-12">  
-    <h6 style="color: white; margin-top: 10px; width: 70%; float: left;" class="chart-title">{{ chartTitle }}</h6>
-      <div class="btn-toolbar" role="toolbar" aria-label="Toolbar with button groups" style="float: right;">
-        <div class="btn-group mr-2" role="group" aria-label="First group">
-            <span v-if='deletable'>
-              <button type="button" class="btn inwards_button_group" data-toggle="tooltip" data-placement="top" title="Remove from your dashboard" v-on:click="removeFromStore"><i class="fa fa-minus" style="padding-right: 10px;"></i></button>
-            </span>
-            <span v-else>
-              <button type="button" class="btn inwards_button_group" data-toggle="tooltip" data-placement="top" title="Add to your dashboard" v-on:click="addToStore"><i class="fa fa-plus" style="padding-right: 10px;"></i></button>
-            </span>
-          </div>
+  <div class="ft-chart-card" v-bind:style="styleObject">
+    <div class="ft-chart-header">
+      <h6 class="ft-chart-title chart-title">{{ chartTitle }}</h6>
+      <div class="ft-chart-actions">
+        <button
+          v-if="deletable"
+          type="button"
+          class="ft-chart-btn"
+          title="Remove from your dashboard"
+          @click="removeFromStore"
+        ><i class="fa fa-minus"></i></button>
+        <button
+          v-else
+          type="button"
+          class="ft-chart-btn"
+          title="Add to your dashboard"
+          @click="addToStore"
+        ><i class="fa fa-plus"></i></button>
       </div>
     </div>
-    </div>
-    </div>
-    <div class="card-body chart-container">
+    <div class="ft-chart-body chart-container">
       <section v-if="errored">
-        <p>We're sorry, we're not able to retrieve this information at the moment, please try back later</p>
+        <p style="padding: 10px; color: var(--ft-text-muted);">We're sorry, we're not able to retrieve this information at the moment, please try back later</p>
       </section>
       <section v-else style="height: 100%;">
-        <div v-if='loading'><ring-loader :loading="loading" :color="color" :size="size" class="loading_disks"></ring-loader></div>
+        <div v-if="loading"><ring-loader :loading="loading" :color="color" :size="size" class="loading_disks"></ring-loader></div>
         <div v-else style="height: 100%">
           <div :id="chartDivId" style="height: 100%;"><ring-loader :loading="loading" :color="color" :size="size" class="loading_disks"></ring-loader></div>
         </div>
@@ -33,9 +35,8 @@
 <script>
 import stateStore from '../../store/state_handler';
 import { RingLoader } from 'vue-spinner/dist/vue-spinner.min.js';
-import ChartContainerVue from '../FishDashboard/ChartContainer.vue';
-const { getCurrentWindow } = require('electron').remote;
-const { dialog } = require('electron').remote;
+import { remote } from '../../services/electron-compat';
+const { getCurrentWindow, dialog } = remote;
 export default {
   components: {
     RingLoader
@@ -119,7 +120,7 @@ export default {
       let self = this;
       let stations = this.urlParameters['stations'];
       let chartStoreId = self.chartId + '-' + stations.join('-');
-      self.$bus.$emit('addStationsToStore', stations, chartStoreId);
+      self.$bus.emit('addStationsToStore', stations, chartStoreId);
       stateStore.getState(
         stateStore.keys.selectedCharts,
         function (selectedCharts) {
@@ -153,6 +154,30 @@ export default {
           stateStore.setState(stateStore.keys.selectedCharts, selectedCharts);
         }
       );
+    },
+    getThemedPlotlyLayout () {
+      // Read CSS custom properties from the nearest theme container
+      const el = this.$el ? this.$el.closest('.theme-dark, .theme-light') : null;
+      const style = el ? getComputedStyle(el) : null;
+      const get = (prop, fallback) => style ? (style.getPropertyValue(prop).trim() || fallback) : fallback;
+      return {
+        paper_bgcolor: get('--ft-bg-surface', '#252526'),
+        plot_bgcolor: get('--ft-bg-surface', '#252526'),
+        font: {
+          family: 'Open Sans, Raleway, Calibri, sans-serif',
+          size: 10,
+          color: get('--ft-text-secondary', '#CCCCCC')
+        },
+        margin: { l: 50, r: 20, b: 40, t: 20, pad: 4 },
+        xaxis: {
+          gridcolor: get('--ft-border', '#3E3E42'),
+          zerolinecolor: get('--ft-border', '#3E3E42')
+        },
+        yaxis: {
+          gridcolor: get('--ft-border', '#3E3E42'),
+          zerolinecolor: get('--ft-border', '#3E3E42')
+        }
+      };
     },
     fetchChartData () {
       // Override this function get the chart data

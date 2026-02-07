@@ -4,9 +4,26 @@
     <div class="container-fluid" style="height: 100%;">
       <div class="row" style="height: 100%;">
         <div class="col-md-4 no-float left-panel" style="background: #252526; padding-left: 8px; overflow: hidden;">
-          <CatchmentTree ref="catchmentTree"/>
+          <!-- Using BaseCatchmentTree with unique treeId -->
+          <BaseCatchmentTree
+            ref="catchmentTree"
+            tree-id="user-dashboard-stations"
+            title="Stations"
+            header-icon="fa-map-marker"
+            :refreshable="false"
+            :selectable="false"
+            :search-enabled="true"
+            container-height="380px"
+            @tree-ready="onTreeReady"
+          />
           <div class="v-space"></div>
-          <MapDashboard ref="mapDashboard"/>
+          <!-- Using BaseMapDashboard with unique mapId -->
+          <BaseMapDashboard
+            ref="mapDashboard"
+            map-id="user-dashboard-map"
+            map-height="410px"
+            :connected-to-tree="false"
+          />
           <div class="v-space"></div>
         </div>
         <div class="col-md-8 no-float right-panel" style="background: #1E1E1E; padding-bottom: 50px; padding-left: 10px; padding-right: 10px; overflow: hidden;">
@@ -17,22 +34,41 @@
     </div>
   </div>
 </template>
+
 <script>
 import stateStore from '../../store/state_handler';
 import UnverifiedChart from '../UserDashboard/UnverifiedChart';
 import UnverifiedDischargeDurationChart from '../Dashboard/DurationCurve';
 import BoxChart from '../UserDashboard/BoxChart';
-import MapDashboard from '../UserDashboard/MapDashboard';
-import CatchmentTree from '../UserDashboard/CatchmentTree';
+// Import base components instead of local ones
+import BaseMapDashboard from '../shared/BaseMapDashboard.vue';
+import BaseCatchmentTree from '../shared/BaseCatchmentTree.vue';
 import StationImage from '../UserDashboard/Station';
 import $ from 'jquery';
 import Muuri from 'muuri';
-import Vue from 'vue';
+import { defineComponent, markRaw } from 'vue';
 import StatusBar from '../StatusBar';
-  import NavButtons from '../../components/NavButtons';
-const { getCurrentWindow } = require('electron').remote;
-export default Vue.extend({
-  data () {
+import NavButtons from '../../components/NavButtons';
+// Import the event bus composable for automatic cleanup
+import { useEventBus } from '../../composables/useEventBus';
+
+export default {
+  name: 'UserDashboard',
+
+  components: {
+    BaseMapDashboard,
+    BaseCatchmentTree,
+    NavButtons,
+    StatusBar
+  },
+
+  setup() {
+    // Use the event bus composable - listeners will be auto-cleaned on unmount
+    const { on, emit } = useEventBus();
+    return { busOn: on, busEmit: emit };
+  },
+
+  data() {
     return {
       charts: {
         'unverified-timeseries': UnverifiedChart,
@@ -47,23 +83,23 @@ export default Vue.extend({
       selectedWMAs: []
     };
   },
-  components: {
-    MapDashboard,
-    NavButtons,
-    CatchmentTree,
-    StatusBar
+
+  computed: {
+    mapDashboardRef() {
+      return this.$refs.mapDashboard;
+    },
+    catchmentTreeRef() {
+      return this.$refs.catchmentTree;
+    }
   },
-  mounted () {
-    this.mapDashboardRef = this.$refs.mapDashboard;
-    this.catchmentTreeRef = this.$refs.catchmentTree;
-    this.catchmentTreeRef.selectable = false;
-    this.catchmentTreeRef.refreshable = false;
-    this.mapDashboardRef.connectedToTree = false;
+
+  mounted() {
     this.getSelectedCharts();
   },
+
   methods: {
-    getStations () {
-      let self = this;
+    getStations() {
+      const self = this;
       let stationsChanged = false;
       stateStore.getState(
         stateStore.keys.selectedWMAs,
@@ -85,8 +121,8 @@ export default Vue.extend({
             return false;
           }
           self.currentStations = Object.assign({}, selectedStations);
-          let features = [];
-          for (let key in selectedStations) {
+          const features = [];
+          for (const key in selectedStations) {
             if (self.stationsFromStoredCharts.indexOf(key) === -1) {
               delete self.currentStations[key];
               stationsChanged = true;
@@ -94,7 +130,7 @@ export default Vue.extend({
               features.push(selectedStations[key]['feature']);
             }
           }
-          let featureCollection = {
+          const featureCollection = {
             'type': 'FeatureCollection',
             'features': features
           };
@@ -106,24 +142,25 @@ export default Vue.extend({
         }
       );
     },
-    getSelectedCharts () {
-      let self = this;
-      let $chartsContainer = $('.grid');
+
+    getSelectedCharts() {
+      const self = this;
+      const $chartsContainer = $('.grid');
       let startDate = new Date();
       startDate.setDate(startDate.getDate() - 7);
       startDate = this.formatDate(startDate);
-      let endDate = this.formatDate(new Date());
+      const endDate = this.formatDate(new Date());
       stateStore.getState(
         stateStore.keys.selectedCharts,
         function (selectedCharts) {
           self.currentCharts = Object.assign({}, selectedCharts);
-          for (let key in selectedCharts) {
-            let ref = `chartComponent-${key}`;
-            let chartId = selectedCharts[key]['chartId'];
+          for (const key in selectedCharts) {
+            const ref = `chartComponent-${key}`;
+            const chartId = selectedCharts[key]['chartId'];
             if (!self.charts[chartId]) {
               continue;
             }
-            let stations = selectedCharts[key]['chartStations'];
+            const stations = selectedCharts[key]['chartStations'];
             if (stations.length < 1) {
               continue;
             }
@@ -132,14 +169,14 @@ export default Vue.extend({
                 self.stationsFromStoredCharts.push(stations[s]);
               }
             }
-            let ChartComponent = Vue.extend(self.charts[chartId]);
-            let chart = new ChartComponent({
+            const ChartComponent = markRaw(defineComponent(self.charts[chartId]));
+            const chart = new ChartComponent({
               data: {
                 chartId: ref
               }
             }).$mount();
-            let itemDiv = $(`<div class="item col-md-6">`);
-            let itemContentDiv = $(`<div class="item-content" data-key="${key}">`);
+            const itemDiv = $(`<div class="item col-md-6">`);
+            const itemContentDiv = $(`<div class="item-content" data-key="${key}">`);
             itemDiv.html(itemContentDiv);
             $chartsContainer.append(itemDiv);
             itemContentDiv.html(chart.$el);
@@ -165,17 +202,17 @@ export default Vue.extend({
             sortData: {
               id: function (item, element) {
                 // get sort id
-                let key = element.children[0].dataset.key;
-                let chartItem = self.currentCharts[key];
+                const key = element.children[0].dataset.key;
+                const chartItem = self.currentCharts[key];
                 if (typeof chartItem['order'] !== 'undefined') {
-                  let order = parseInt(chartItem['order']);
+                  const order = parseInt(chartItem['order']);
                   return order;
                 }
                 return item._id;
               }
             },
             dragStartPredicate: function (item, event) {
-              let target = $(event.target);
+              const target = $(event.target);
               if (target.hasClass('inwards_button_group') || target.parent().hasClass('inwards_button_group')) {
                 return false;
               }
@@ -191,58 +228,61 @@ export default Vue.extend({
         }
       );
     },
-    afterMoved (data) {
-      let grid = data.item.getGrid();
-      let items = grid.getItems();
+
+    afterMoved(data) {
+      const grid = data.item.getGrid();
+      const items = grid.getItems();
       for (let i = 0; i < items.length; i++) {
-        let key = items[i].getElement().children[0].dataset.key;
+        const key = items[i].getElement().children[0].dataset.key;
         this.currentCharts[key]['order'] = i;
       }
       stateStore.setState(stateStore.keys.selectedCharts, this.currentCharts);
     },
-    async itemRemoved (itemId) {
+
+    async itemRemoved(itemId) {
       itemId = itemId.replace('chartComponent-', '');
       console.log(itemId);
-      let items = this.grid.getItems();
+      const items = this.grid.getItems();
       for (let i = 0; i < items.length; i++) {
-        let key = items[i].getElement().children[0].dataset.key;
+        const key = items[i].getElement().children[0].dataset.key;
         this.currentCharts[key]['order'] = i;
       }
-      let currentChart = this.currentCharts[itemId];
+      const currentChart = this.currentCharts[itemId];
       this.grid.remove(currentChart['order'], {removeElements: true});
       delete this.currentCharts[itemId];
       await stateStore.setState(stateStore.keys.selectedCharts, this.currentCharts);
       getCurrentWindow().reload();
     },
-    generateTreeData (dictionary) {
-      let treeData = [];
-      let self = this;
+
+    generateTreeData(dictionary) {
+      const treeData = [];
+      const self = this;
       $.each(dictionary, function (key, catchment) {
         let hasChildren = false;
         if (typeof catchment === 'object' || catchment instanceof Array) {
           hasChildren = true;
         }
-        let c = {
+        const c = {
           text: hasChildren ? key : catchment,
           id: hasChildren ? key : catchment,
           type: hasChildren ? 'layer' : 'station'
         };
         if (hasChildren) {
           c['children'] = self.generateTreeData(catchment);
-        };
+        }
         treeData.push(c);
       });
       return treeData;
     },
-    createCatchmentTree (stationsData) {
+
+    createCatchmentTree(stationsData) {
       // Start adding stations data to catchment
-      let catchmentsData = {};
+      const catchmentsData = {};
       for (let i = 0; i < stationsData.features.length; i++) {
-        // let primary = stationsData.features[i]['properties']['primary'];
-        let secondary = stationsData.features[i]['properties']['secondary'];
-        let station = stationsData.features[i]['properties']['station'];
-        let place = stationsData.features[i]['properties']['place']; 
-        let latestReading = stationsData.features[i]['properties']['latest'];
+        const secondary = stationsData.features[i]['properties']['secondary'];
+        const station = stationsData.features[i]['properties']['station'];
+        const place = stationsData.features[i]['properties']['place'];
+        const latestReading = stationsData.features[i]['properties']['latest'];
         if (!catchmentsData[secondary]) {
           catchmentsData[secondary] = [];
         }
@@ -257,12 +297,19 @@ export default Vue.extend({
           catchmentsData[secondary].sort();
         }
       }
-      let treeData = this.generateTreeData(catchmentsData);
-      this.catchmentTreeRef.createTree(treeData, null, this.onTreeReady);
+      const treeData = this.generateTreeData(catchmentsData);
+      this.catchmentTreeRef.createTree(treeData, null, this._onTreeReadyCallback);
     },
-    onTreeReady (event, data) {
+
+    // Raw callback for createTree
+    _onTreeReadyCallback(event, data) {
       this.catchmentTreeRef.expandAll();
+    },
+
+    // Handle tree ready event from component event (receives { event, data })
+    onTreeReady({ event, data }) {
+      this._onTreeReadyCallback(event, data);
     }
   }
-});
+};
 </script>

@@ -25,32 +25,19 @@
           let jsonData = response.data;
           let boxData = [];
           setTimeout(() => {
-            let layout = {
+            let baseLayout = this.getThemedPlotlyLayout();
+            let layout = Object.assign({}, baseLayout, {
               title: false,
-              font: {
-                family: 'Raleway, Calibri',
-                size: 9
-              },
-              yaxis: {
+              yaxis: Object.assign({}, baseLayout.yaxis, {
                 title: 'Discharge (cumecs)',
                 autorange: true,
                 zeroline: true,
                 dtick: 5,
                 gridwidth: 1,
-                zerolinecolor: 'rgb(0, 0, 0)',
                 zerolinewidth: 2
-              },
-              margin: {
-                l: 50,
-                r: 50,
-                b: 50,
-                t: 50,
-                pad: 4
-              },
-              paper_bgcolor: 'rgb(255, 255, 255)',
-              plot_bgcolor: 'rgb(255, 255, 255)',
+              }),
               showlegend: false
-            };
+            });
             for (let variable in jsonData) {
               boxData.push(jsonData[variable]);
             }

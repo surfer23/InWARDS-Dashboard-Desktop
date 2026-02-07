@@ -7,7 +7,20 @@
           class="col-md-4 no-float left-panel"
           style="background: #252526; padding-left: 8px"
         >
-          <CatchmentTree ref="catchmentTree" />
+          <!-- Using BaseCatchmentTree with unique treeId -->
+          <BaseCatchmentTree
+            ref="catchmentTree"
+            tree-id="dam-dashboard-stations"
+            title="Stations"
+            header-icon="fa-map-marker"
+            :refreshable="true"
+            :selectable="true"
+            :search-enabled="true"
+            container-height="380px"
+            @refresh-requested="fetchStations"
+            @tree-clicked="onCatchmentTreeSelectedHandler"
+            @tree-ready="onTreeReady"
+          />
           <div>
             <div class="card rounded-0">
               <div class="card-body">
@@ -18,13 +31,13 @@
                       <div class="form-group">
                         <label
                           class="datepicker"
-                          for="dateStart"
+                          for="damDateStart"
                           style="padding-left: 0px"
                           >Start Date:</label
                         >
                         <input
                           class="form-control datepicker"
-                          id="dateStart"
+                          id="damDateStart"
                           style="margin-left: 4px; width: 65%"
                           placeholder="Start Date"
                           onfocus="(this.type='date')"
@@ -37,13 +50,13 @@
                       <div class="form-group">
                         <label
                           class="datepicker"
-                          for="dateEnd"
+                          for="damDateEnd"
                           style="margin-right: 2px"
                           >End Date:</label
                         >
                         <input
                           class="form-control datepicker"
-                          id="dateEnd"
+                          id="damDateEnd"
                           style="margin-right: 2px; width: 65%"
                           placeholder="End Date"
                           onfocus="(this.type='date')"
@@ -60,13 +73,13 @@
                         class="form-check form-check-inline funkyradio-primary"
                       >
                         <input
-                          id="ts"
+                          id="damTs"
                           type="checkbox"
                           class="form-check-input"
                           checked="true"
                         />
                         <label
-                          for="ts"
+                          for="damTs"
                           class="form-check-label"
                           style="width: 11rem; font-size: 11px"
                           >Timeseries</label
@@ -76,13 +89,13 @@
                         class="form-check form-check-inline funkyradio-primary"
                       >
                         <input
-                          id="bx"
+                          id="damBx"
                           type="checkbox"
                           class="form-check-input"
                           checked="true"
                         />
                         <label
-                          for="bx"
+                          for="damBx"
                           class="form-check-label"
                           style="width: 11rem; font-size: 11px"
                           >Boxplot</label
@@ -92,13 +105,13 @@
                         class="form-check form-check-inline funkyradio-primary"
                       >
                         <input
-                          id="fdc"
+                          id="damFdc"
                           type="checkbox"
                           class="form-check-input"
                           checked="true"
                         />
                         <label
-                          for="fdc"
+                          for="damFdc"
                           class="form-check-label"
                           style="width: 11rem; font-size: 11px"
                           >Flow Duration</label
@@ -124,7 +137,15 @@
             </div>
           </div>
           <hr />
-          <MapDashboard ref="mapDashboard" />
+          <!-- Using BaseMapDashboard with unique mapId -->
+          <BaseMapDashboard
+            ref="mapDashboard"
+            map-id="dam-dashboard-map"
+            map-height="410px"
+            :connected-to-tree="true"
+            @station-selected="onStationSelectedFromMap"
+            @station-deselected="onStationDeselectedFromMap"
+          />
         </div>
         <div
           class="col-md-8 no-float right-panel"
@@ -155,6 +176,7 @@
     </div>
   </div>
 </template>
+
 <style>
 .v-space {
   height: 10px;
@@ -165,12 +187,14 @@
   overflow-y: auto;
 }
 </style>
+
 <script>
 import axios from 'axios'
 import Header from '../../components/Header'
 import NavButtons from '../../components/NavButtons'
-import MapDashboard from './MapDashboard'
-import CatchmentTree from './CatchmentTree'
+// Import base components instead of local ones
+import BaseMapDashboard from '../shared/BaseMapDashboard.vue'
+import BaseCatchmentTree from '../shared/BaseCatchmentTree.vue'
 import UnverifiedChart from './UnverifiedChart'
 import DurationCurve from './DurationCurve'
 import BoxChart from './BoxChart'
@@ -178,92 +202,122 @@ import Station from './Station'
 import $ from 'jquery'
 import stateStore from '../../store/state_handler'
 import StatusBar from '../StatusBar'
-import path from 'path'
+import { remote } from '../../services/electron-compat'
+// Import the event bus composable for automatic cleanup
+import { useEventBus } from '../../composables/useEventBus'
 require('promise.prototype.finally').shim()
-const { dialog, app } = require('electron').remote
+
+const { dialog, app } = remote
 
 export default {
-  data() {
-    return {
-      stationsApi: 'https://inwards.award.org.za/app_json/res_real_stations.php',
-      stationsCoordinates: {}, // To stored all stations with their coordinates
-      stationsFeatures: {}, // To stored station features
-      stationsRequest: null,
-      selectedDamSites: [],
-      selectedWMAs: [],
-    }
-  },
-  mounted() {
-    let self = this
-    self.mapDashboardRef = self.$refs.mapDashboard
-    self.catchmentTreeRef = self.$refs.catchmentTree
-    stateStore.getState(stateStore.keys.selectedWMAs, function (selectedWMAs) {
-      if (!selectedWMAs) {
-        return false
-      }
-      if (selectedWMAs.length === 0) {
-        return false
-      }
-      self.selectedWMAs = selectedWMAs
-      self.mapDashboardRef.showSelectedWMA(selectedWMAs)
-      self.fetchStations()
-    })
-    self.$bus.$on('stationSelectedFromMap', (station, isStationSelected) => {
-      self.catchmentTreeRef.toggleNode(station, isStationSelected)
-    })
-    self.$bus.$on('refreshStations', () => {
-      self.fetchStations()
-    })
-    self.$bus.$on('addStationsToStore', (stations, chartStoredId) => {
-      self.addStationsToStore(stations, chartStoredId)
-    })
-    stateStore.getState(stateStore.keys.dateEnd, function (dateEnd) {
-      if (!dateEnd) {
-        var endDate = new Date()
-        var dd = endDate.getDate()
-        var mm = endDate.getMonth() + 1
-        var yyyy = endDate.getFullYear()
-        if (dd < 10) {
-          dd = '0' + dd
-        }
-        if (mm < 10) {
-          mm = '0' + mm
-        }
-        dateEnd = yyyy + '-' + mm + '-' + dd
-      }
-      document.getElementById('dateEnd').setAttribute('value', dateEnd)
-    })
-    document.getElementById('dateEnd').onchange = function () {
-      stateStore.setState(stateStore.keys.dateEnd, this.value)
-    }
-    var startDate = new Date()
-    startDate.setDate(startDate.getDate() - 14)
-    var dd = startDate.getDate()
-    var mm = startDate.getMonth() + 1
-    var yyyy = startDate.getFullYear()
-    if (dd < 10) {
-      dd = '0' + dd
-    }
-    if (mm < 10) {
-      mm = '0' + mm
-    }
-    startDate = yyyy + '-' + mm + '-' + dd
-    document.getElementById('dateStart').setAttribute('value', startDate)
-  },
+  name: 'DamDashboard',
+
   components: {
     Header,
     NavButtons,
-    MapDashboard,
-    CatchmentTree,
+    BaseMapDashboard,
+    BaseCatchmentTree,
     BoxChart,
     UnverifiedChart,
     DurationCurve,
     Station,
     StatusBar,
   },
+
+  setup() {
+    // Use the event bus composable - listeners will be auto-cleaned on unmount
+    const { on, emit } = useEventBus()
+    return { busOn: on, busEmit: emit }
+  },
+
+  data() {
+    return {
+      stationsApi: 'https://inwards.award.org.za/app_json/res_real_stations.php',
+      stationsCoordinates: {}, // To store all stations with their coordinates
+      stationsFeatures: {}, // To store station features
+      stationsRequest: null,
+      selectedDamSites: [],
+      selectedWMAs: [],
+    }
+  },
+
+  computed: {
+    mapDashboardRef() {
+      return this.$refs.mapDashboard
+    },
+    catchmentTreeRef() {
+      return this.$refs.catchmentTree
+    }
+  },
+
+  mounted() {
+    const self = this
+
+    // Load selected WMAs and initialize map
+    stateStore.getState(stateStore.keys.selectedWMAs, function (selectedWMAs) {
+      if (!selectedWMAs || selectedWMAs.length === 0) {
+        return false
+      }
+      self.selectedWMAs = selectedWMAs
+      self.mapDashboardRef.showSelectedWMA(selectedWMAs)
+      self.fetchStations()
+    })
+
+    // Register event bus listeners using composable (auto-cleanup on unmount)
+    // Note: Station selection is now handled via component events, not global bus
+    this.busOn('addStationsToStore', (payload) => {
+      if (payload && payload.stations) {
+        self.addStationsToStore(payload.stations, payload.chartStoredId)
+      }
+    })
+
+    // Initialize date pickers with unique IDs for this dashboard
+    stateStore.getState(stateStore.keys.dateEnd, function (dateEnd) {
+      if (!dateEnd) {
+        const endDate = new Date()
+        let dd = endDate.getDate()
+        let mm = endDate.getMonth() + 1
+        const yyyy = endDate.getFullYear()
+        if (dd < 10) dd = '0' + dd
+        if (mm < 10) mm = '0' + mm
+        dateEnd = yyyy + '-' + mm + '-' + dd
+      }
+      document.getElementById('damDateEnd').setAttribute('value', dateEnd)
+    })
+
+    document.getElementById('damDateEnd').onchange = function () {
+      stateStore.setState(stateStore.keys.dateEnd, this.value)
+    }
+
+    // Set start date to 14 days ago
+    const startDate = new Date()
+    startDate.setDate(startDate.getDate() - 14)
+    let dd = startDate.getDate()
+    let mm = startDate.getMonth() + 1
+    const yyyy = startDate.getFullYear()
+    if (dd < 10) dd = '0' + dd
+    if (mm < 10) mm = '0' + mm
+    const startDateStr = yyyy + '-' + mm + '-' + dd
+    document.getElementById('damDateStart').setAttribute('value', startDateStr)
+  },
+
   methods: {
+    // Handle station selection from map - called via component event
+    onStationSelectedFromMap({ station, feature }) {
+      console.log('Dam station selected from map:', station)
+      // Toggle the corresponding tree node
+      this.catchmentTreeRef.toggleNode(station, true)
+    },
+
+    // Handle station deselection from map - called via component event
+    onStationDeselectedFromMap({ station, feature }) {
+      console.log('Dam station deselected from map:', station)
+      // Toggle the corresponding tree node
+      this.catchmentTreeRef.toggleNode(station, false)
+    },
+
     fetchUnverified() {
-      const selectedDamSites = this.mapDashboardRef.getselectedDamSites()
+      const selectedDamSites = this.mapDashboardRef.getSelectedStations()
       if (selectedDamSites.length === 0) {
         dialog.showMessageBox(null, {
           type: 'warning',
@@ -272,8 +326,8 @@ export default {
         })
         return
       }
-      let dateStartString = $('#dateStart').val()
-      let dateEndString = $('#dateEnd').val()
+      const dateStartString = $('#damDateStart').val()
+      const dateEndString = $('#damDateEnd').val()
       if (!dateStartString || !dateEndString) {
         dialog.showMessageBox(null, {
           type: 'warning',
@@ -282,8 +336,8 @@ export default {
         })
         return
       }
-      let dateStart = new Date(dateStartString)
-      let dateEnd = new Date(dateEndString)
+      const dateStart = new Date(dateStartString)
+      const dateEnd = new Date(dateEndString)
       if (dateStart > dateEnd) {
         dialog.showMessageBox(null, {
           type: 'warning',
@@ -292,7 +346,7 @@ export default {
         })
         return
       }
-      let tsChart = document.getElementById('ts').checked
+      const tsChart = document.getElementById('damTs').checked
       if (tsChart === true) {
         this.$refs.chartComponent.displayChart(
           selectedDamSites,
@@ -300,7 +354,7 @@ export default {
           this.formatDate(dateEnd)
         )
       }
-      let bxChart = document.getElementById('bx').checked
+      const bxChart = document.getElementById('damBx').checked
       if (bxChart === true) {
         this.$refs.boxComponent.displayChart(
           selectedDamSites,
@@ -308,7 +362,7 @@ export default {
           this.formatDate(dateEnd)
         )
       }
-      let fdcChart = document.getElementById('fdc').checked
+      const fdcChart = document.getElementById('damFdc').checked
       if (fdcChart === true) {
         this.$refs.durationComponent.displayChart(
           selectedDamSites,
@@ -322,28 +376,42 @@ export default {
         this.formatDate(dateEnd)
       )
     },
-    fetchStations() {
-      let self = this
+
+    async fetchStations() {
+      const self = this
       let wmaNames = Object.assign([], self.selectedWMAs)
-      let fs = require('fs')
-      let dir = path.join(app.getPath('userData'), '/stations')
-      // TODO : Create an util class for file storage
-      if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir)
+
+      // Get userData path via IPC
+      const userDataPath = await window.electronAPI.getUserDataPath()
+      const stationsDir = `${userDataPath}/stations`
+
+      // Ensure directory exists
+      const dirExists = await window.electronAPI.pathExists(stationsDir)
+      if (!dirExists) {
+        await window.electronAPI.createDirectory(stationsDir)
       }
+
       // Cancel previous request if any
       if (this.stationsRequest) {
         this.stationsRequest.cancel('Canceling stations request')
         this.stationsRequest = null
       }
+
       // Wrap wma name with single quotes, for api purposes
       wmaNames = wmaNames.sort()
       for (let i = 0; i < wmaNames.length; i++) {
         wmaNames[i] = `'${wmaNames[i]}'`
       }
-      let url = `${self.stationsApi}?wma=${wmaNames.join()}`
+      const url = `${self.stationsApi}?wma=${wmaNames.join()}`
       console.log(url)
-      let stationFile = `${dir}/${url.hashCode()}.json`
+
+      // Generate a simple hash for the filename
+      const urlHash = url.split('').reduce((a, b) => {
+        a = ((a << 5) - a) + b.charCodeAt(0)
+        return a & a
+      }, 0)
+      const stationFile = `${stationsDir}/${Math.abs(urlHash)}.json`
+
       // Check if online
       if (navigator.onLine) {
         let cancelToken = null
@@ -352,25 +420,38 @@ export default {
         }
         axios
           .get(url, { cancelToken: cancelToken })
-          .then((response) => {
+          .then(async (response) => {
             self.mapDashboardRef.loadStationsToMap(response.data)
             self.createCatchmentTree(response.data)
-            fs.writeFileSync(stationFile, JSON.stringify(response.data))
+            // Save to cache using IPC
+            try {
+              const jsonData = JSON.stringify(response.data)
+              await window.electronAPI.writeFile(stationFile, jsonData)
+            } catch (err) {
+              console.warn('Could not cache stations data:', err)
+            }
           })
           .catch((error) => {
             console.log(error)
           })
       } else {
-        if (fs.existsSync(stationFile)) {
-          let jsonData = fs.readFileSync(stationFile, 'utf-8')
-          let stationsData = JSON.parse(jsonData)
-          self.mapDashboardRef.loadStationsToMap(stationsData)
-          self.createCatchmentTree(stationsData)
+        // Try to load from cache
+        try {
+          const exists = await window.electronAPI.pathExists(stationFile)
+          if (exists) {
+            const jsonData = await window.electronAPI.readFile(stationFile)
+            const stationsData = JSON.parse(jsonData)
+            self.mapDashboardRef.loadStationsToMap(stationsData)
+            self.createCatchmentTree(stationsData)
+          }
+        } catch (err) {
+          console.warn('Could not load cached stations:', err)
         }
       }
     },
+
     addStationsToStore(stations, chartStoredId) {
-      let self = this
+      const self = this
       stateStore.getState(
         stateStore.keys.selectedDamSites,
         function (selectedDamSites) {
@@ -401,15 +482,16 @@ export default {
         }
       )
     },
+
     generateTreeData(dictionary) {
-      let treeData = []
-      let self = this
+      const treeData = []
+      const self = this
       $.each(dictionary, function (key, catchment) {
         let hasChildren = false
         if (typeof catchment === 'object' || catchment instanceof Array) {
           hasChildren = true
         }
-        let c = {
+        const c = {
           text: hasChildren ? key : catchment,
           id: hasChildren ? key : catchment,
           type: hasChildren ? 'layer' : 'station',
@@ -421,16 +503,16 @@ export default {
       })
       return treeData
     },
+
     createCatchmentTree(stationsData) {
-      let self = this
+      const self = this
       // Start adding stations data to catchment
-      let catchmentsData = self.mapDashboardRef.getCatchmentsData()
+      const catchmentsData = self.mapDashboardRef.getCatchmentsData()
       for (let i = 0; i < stationsData.features.length; i++) {
-        // let primary = stationsData.features[i]['properties']['primary'];
-        let secondary = stationsData.features[i]['properties']['secondary']
-        let station = stationsData.features[i]['properties']['station']
-        let place = stationsData.features[i]['properties']['place']
-        let latestReading = stationsData.features[i]['properties']['latest']
+        const secondary = stationsData.features[i]['properties']['secondary']
+        const station = stationsData.features[i]['properties']['station']
+        const place = stationsData.features[i]['properties']['place']
+        const latestReading = stationsData.features[i]['properties']['latest']
         this.stationsFeatures[station] = stationsData.features[i]
         this.stationsCoordinates[station] =
           stationsData.features[i].geometry.coordinates
@@ -450,14 +532,17 @@ export default {
           catchmentsData[secondary].sort()
         }
       }
-      let treeData = self.generateTreeData(catchmentsData)
+      const treeData = self.generateTreeData(catchmentsData)
+      // Pass callbacks in the format expected by createTree (raw event, data)
       this.catchmentTreeRef.createTree(
         treeData,
-        this.onCatchmentTreeSelectedHandler,
-        this.onTreeReady
+        this._onCatchmentTreeSelectedCallback,
+        this._onTreeReadyCallback
       )
     },
-    onTreeReady(event, data) {
+
+    // Raw callbacks for createTree (receive event, data directly)
+    _onTreeReadyCallback(event, data) {
       const self = this
       stateStore.getState(
         stateStore.keys.selectedCatchments,
@@ -469,30 +554,49 @@ export default {
         }
       )
     },
-    onCatchmentTreeSelectedHandler(event, data) {
+
+    _onCatchmentTreeSelectedCallback(event, data) {
+      // Delegate to the main handler with unwrapped params
+      this._handleTreeSelection(event, data)
+    },
+
+    // Handle tree ready event from component event (receives { event, data })
+    onTreeReady({ event, data }) {
+      this._onTreeReadyCallback(event, data)
+    },
+
+    // Handle tree clicked event from component event (receives { event, data })
+    onCatchmentTreeSelectedHandler({ event, data }) {
+      this._handleTreeSelection(event, data)
+    },
+
+    // Internal handler for tree selection (used by both callback and event)
+    _handleTreeSelection(event, data) {
       // On catchment tree clicked
-      let i = []
       let selected = ''
-      let selectedCatchments = []
-      let _selectedDamSites = []
+      const selectedCatchments = []
+      const _selectedDamSites = []
       let selectedBits = []
-      let _unselectedDamSites = Object.assign([], this.selectedDamSites)
-      for (i = 0; i < data.selected.length; i++) {
+      const _unselectedDamSites = Object.assign([], this.selectedDamSites)
+
+      for (let i = 0; i < data.selected.length; i++) {
         selected = data.instance.get_node(data.selected[i]).text
         selectedBits = selected.split(':')
-        let type = data.instance.get_node(data.selected[i]).type
+        const type = data.instance.get_node(data.selected[i]).type
         if (type === 'layer') {
           selectedCatchments.push(selectedBits[0])
         } else if (type === 'station') {
           _selectedDamSites.push(selectedBits[0])
-          if (_unselectedDamSites.indexOf(selectedBits[0]) !== -1)
+          if (_unselectedDamSites.indexOf(selectedBits[0]) !== -1) {
             _unselectedDamSites.splice(
               _unselectedDamSites.indexOf(selectedBits[0]),
               1
             )
+          }
         }
       }
-      this.mapDashboardRef.toggleselectedDamSitesByStationNames(
+
+      this.mapDashboardRef.toggleSelectedStationsByStationNames(
         _selectedDamSites,
         _unselectedDamSites
       )

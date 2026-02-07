@@ -1,6 +1,6 @@
 /* eslint-disable one-var */
 /* eslint-disable no-extend-native */
-import Vue from 'vue';
+
 String.prototype.hashCode = function () {
   var hash = 0, i, chr;
   if (this.length === 0) return hash;
@@ -11,27 +11,35 @@ String.prototype.hashCode = function () {
   }
   return hash;
 };
-Vue.mixin({
-  methods: {
-    dictToUri: dictionary => {
-      var str = [];
-      for (var p in dictionary) {
-        str.push(encodeURIComponent(p) + '=' + encodeURIComponent(dictionary[p]));
-      }
-      return str.join('&');
-    },
-    formatDate: date => {
-      var d = new Date(date),
-        month = '' + (d.getMonth() + 1),
-        day = '' + d.getDate(),
-        year = d.getFullYear();
-      if (month.length < 2) {
-        month = '0' + month;
-      }
-      if (day.length < 2) {
-        day = '0' + day;
-      }
-      return [year, month, day].join('-');
+
+// Helper methods that can be used as a mixin or imported directly
+export const helperMethods = {
+  dictToUri: dictionary => {
+    var str = [];
+    for (var p in dictionary) {
+      str.push(encodeURIComponent(p) + '=' + encodeURIComponent(dictionary[p]));
     }
+    return str.join('&');
+  },
+  formatDate: date => {
+    var d = new Date(date),
+      month = '' + (d.getMonth() + 1),
+      day = '' + d.getDate(),
+      year = d.getFullYear();
+    if (month.length < 2) {
+      month = '0' + month;
+    }
+    if (day.length < 2) {
+      day = '0' + day;
+    }
+    return [year, month, day].join('-');
   }
-});
+};
+
+// Vue 3 compatible mixin object (can be used with app.mixin())
+export const helperMixin = {
+  methods: helperMethods
+};
+
+// Default export for backward compatibility
+export default helperMixin;

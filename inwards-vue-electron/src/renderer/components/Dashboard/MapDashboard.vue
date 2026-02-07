@@ -1,11 +1,11 @@
 <template>
     <div>
-      <div id="popup" class="ol-popup">
-        <a href="#" id="popup-closer" class="ol-popup-closer"></a>
-        <div id="popup-content" class="ol-popup-content"></div>
+      <div id="popup" ref="popup" class="ol-popup">
+        <a href="#" id="popup-closer" ref="popupCloser" class="ol-popup-closer"></a>
+        <div id="popup-content" ref="popupContent" class="ol-popup-content"></div>
       </div>
-      <template v-for="(child) in popups">
-        <component :is="child" :key="child.name" :ref="child.id"></component>
+      <template v-for="(child) in popups" :key="child.name">
+        <component :is="child" :ref="child.id"></component>
       </template>
       <div class="card rounded-0">
         <div class="card-body">
@@ -18,105 +18,15 @@
     </div>
 </template>
 <style>
-  .ol-popup {
-    opacity: 0.7;
-    font-weight: bold;
-    position: absolute;
-    background-color: white;
-    box-shadow: 0 1px 4px rgba(0,0,0,0.2);
-    padding: 5px;
-    border-radius: 10px;
-    border: 1px solid #cccccc;
-    bottom: 12px;
-    left: -40px;
-    min-width: 75px;
-  }
-  .card-body {
-    padding: 0
-  }
-  .ol-popup:after, .ol-popup:before {
-    top: 100%;
-    border: solid transparent;
-    content: " ";
-    height: 0;
-    width: 0;
-    position: absolute;
-    pointer-events: none;
-  }
-  .ol-popup:after {
-    border-top-color: white;
-    border-width: 10px;
-    left: 38px;
-    margin-left: -10px;
-  }
-  .ol-popup:before {
-    border-top-color: #cccccc;
-    border-width: 11px;
-    left: 38px;
-    margin-left: -11px;
-  }
-  .ol-popup-closer {
-    text-decoration: none;
-    position: absolute;
-    top: 2px;
-    right: 8px;
-  }
-  .ol-popup-closer:after {
-    content: "✖";
-  }
-  .ol-popup-content {
-    font-size: 12px;
-  }
-  .ol-popup-content p {
-    max-width: 90px;;
-    margin-bottom: 0 !important;
-  } 
+  /* OL popup/tooltip styles are now in dashboard.css (global, theme-aware) */
   #dashboard-map-unverified {
     width: 100%;
     height: 410px;
   }
-  .ol-tooltip {
-    position: absolute;
-    background-color: white;
-    -webkit-filter: drop-shadow(0 1px 4px rgba(0,0,0,0.2));
-    filter: drop-shadow(0 1px 4px rgba(0,0,0,0.2));
-    padding: 10px;
-    border-radius: 10px;
-    border: 1px solid #cccccc;
-    bottom: 17px;
-    left: -50px;
-    min-width: 190px;
-  }
-  .ol-tooltip:after, .ol-tooltip:before {
-    top: 100%;
-    border: solid transparent;
-    content: " ";
-    height: 0;
-    width: 0;
-    position: absolute;
-    pointer-events: none;
-  }
-  .ol-tooltip:after {
-    border-top-color: white;
-    border-width: 10px;
-    left: 48px;
-    margin-left: -10px;
-  }
-  .ol-tooltip:before {
-    border-top-color: #cccccc;
-    border-width: 11px;
-    left: 48px;
-    margin-left: -11px;
-  }
-   .ol-tooltip p {
-     margin-top: 0;
-     margin-bottom: 0;
-   }
 </style>
 
 <script>
   /* eslint-disable no-unused-vars */
-  import Vue from 'vue';
   import Map from 'ol/Map';
   import View from 'ol/View';
   import {transform} from 'ol/proj';
@@ -187,18 +97,20 @@
     mounted () {
       var tooltipContainer = document.getElementById('tooltip');
       var tooltipContent = document.getElementById('tooltip-content');
-      let container = document.getElementById('popup');
-      let closer = document.getElementById('popup-closer');
+      let container = this.$refs.popup;
+      let closer = this.$refs.popupCloser;
       let self = this;
       /**
       * Add a click handler to hide the popup.
       * @return {boolean} Don't follow the href.
       */
-      closer.onclick = function () {
-        self.overlay.setPosition(undefined);
-        closer.blur();
-        return false;
-      };
+      if (closer) {
+        closer.onclick = function () {
+          self.overlay.setPosition(undefined);
+          closer.blur();
+          return false;
+        };
+      }
       /**
        * Create an overlay to anchor the popup the map
        */
@@ -355,20 +267,22 @@
         let self = this;
         self.map.forEachFeatureAtPixel(pixel, function (feature, layer) {
           let station = feature.get(self.keys.station);
-          let isStationSelected = feature.get(self.keys.selected);
+          // Convert to boolean - undefined/null/false all become false
+          let isStationSelected = feature.get(self.keys.selected) === true;
           if (!self.connectedToTree) {
             content.innerHTML = `<p>${station.split(' ')[0]}</p>`;
             self.overlay.setPosition(feature.getGeometry().getCoordinates());
             return false;
           }
           if (!station) return false;
-          if (!isStationSelected) {
+          // Determine the new selection state (opposite of current)
+          let newSelectionState = !isStationSelected;
+          if (newSelectionState) {
             feature.set(self.keys.selected, true);
             feature.setStyle(self.stationsSelectedStyle);
             self.selectedStations.push(station);
             content.innerHTML = `<p>${station.split(' ')[0]}</p>`;
             self.overlay.setPosition(feature.getGeometry().getCoordinates());
-            // console.log(feature.getGeometry().getCoordinates());
           } else {
             feature.set(self.keys.selected, false);
             feature.setStyle(self.stationsDefaultStyle);
@@ -377,7 +291,9 @@
               self.selectedStations.splice(index, 1);
             }
           }
-          self.$bus.$emit('stationSelectedFromMap', station, !isStationSelected);
+          console.log('Emitting stationSelectedFromMap:', station, 'newSelectionState:', newSelectionState);
+          // Mitt only passes one payload argument, so we need to pass an object
+          self.$bus.emit('stationSelectedFromMap', { station: station, selected: newSelectionState });
           return true;
         });
       },

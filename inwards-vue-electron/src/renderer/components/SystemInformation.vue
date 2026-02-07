@@ -22,16 +22,14 @@
 </template>
 
 <script>
-import Vue from 'vue'
-export default Vue.extend({
+export default {
   data() {
     return {
-      versions: process.versions,
-      platform: require('os').platform(),
+      versions: window.versions || {},
+      platform: window.electronAPI?.getPlatform?.() || navigator.platform || 'Unknown',
     }
   },
-  created() {},
-})
+}
 </script>
 
 <style></style>

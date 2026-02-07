@@ -8,22 +8,28 @@ const {
   productName,
 } = require('../package.json')
 
-const externals = Object.keys(dependencies).concat(Object.keys(devDependencies))
 const isDevMode = process.env.NODE_ENV === 'development'
-const whiteListedModules = []
+
+// Modules that should not be bundled (kept external)
+// For main process, electron must be external
+const externals = [
+  'electron',  // Must be external for main process
+  ...Object.keys(dependencies || {}).filter(d =>
+    // Keep these bundled
+    !['sql.js'].includes(d)
+  ),
+  { 'electron-debug': 'electron-debug' }
+]
 
 const config = {
   name: 'main',
   mode: process.env.NODE_ENV,
-  devtool: 'source-map',
+  devtool: isDevMode ? 'source-map' : 'source-map',
   entry: {
-    main: path.join(__dirname, '../src/main/index.js')
+    main: path.join(__dirname, '../src/main/index.js'),
+    preload: path.join(__dirname, '../src/main/preload.js')
   },
-  externals: [
-    'sqlite3',
-    ...Object.keys(dependencies || {}),
-    {'electron-debug': 'electron-debug'}
-  ],
+  externals: externals,
   module: {
     rules: [
       {
@@ -42,14 +48,16 @@ const config = {
       },
       {
         test: /\.docx$/,
-        use: 'file-loader?name=[name].[ext]'
+        type: 'asset/resource',
+        generator: {
+          filename: '[name][ext]'
+        }
       },
     ],
   },
   node: {
-    global: true,
-    __dirname: isDevMode,
-    __filename: isDevMode,
+    __dirname: false,  // Keep real __dirname for preload path resolution
+    __filename: false,
   },
   plugins: [
     new webpack.DefinePlugin({
@@ -84,6 +92,7 @@ if (isDevMode) {
         {
           from: path.join(__dirname, '../src/data'),
           to: path.join(__dirname, '../dist/data'),
+          noErrorOnMissing: true,
         },
         {
           from: path.join(__dirname, '../static'),
@@ -91,6 +100,7 @@ if (isDevMode) {
           globOptions: {
             ignore: ['.*'],
           },
+          noErrorOnMissing: true,
         },
       ],
     }),

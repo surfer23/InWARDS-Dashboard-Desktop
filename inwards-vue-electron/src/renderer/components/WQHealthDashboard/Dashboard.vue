@@ -454,7 +454,20 @@
               </div>
             </div>
           </div>
-          <CatchmentTree ref="catchmentTree" />
+          <!-- Using BaseCatchmentTree with unique treeId -->
+          <BaseCatchmentTree
+            ref="catchmentTree"
+            tree-id="wqhealth-dashboard-stations"
+            title="Stations"
+            header-icon="fa-map-marker"
+            :refreshable="true"
+            :selectable="true"
+            :search-enabled="true"
+            container-height="380px"
+            @refresh-requested="fetchStations"
+            @tree-clicked="onCatchmentTreeSelectedHandler"
+            @tree-ready="onTreeReady"
+          />
           <div class="card rounded-0">
             <div class="card-body">
               <div class="row no-gutters">
@@ -484,7 +497,15 @@
               </div>
             </div>
           </div>
-          <MapDashboard ref="mapDashboard" />
+          <!-- Using BaseMapDashboard with unique mapId -->
+          <BaseMapDashboard
+            ref="mapDashboard"
+            map-id="wqhealth-dashboard-map"
+            map-height="410px"
+            :connected-to-tree="true"
+            @station-selected="onStationSelectedFromMap"
+            @station-deselected="onStationDeselectedFromMap"
+          />
         </div>
         <div
           class="col-md-8 no-float right-panel"
@@ -1168,9 +1189,10 @@
 <script>
 import axios from 'axios'
 import NavButtons from '../../components/NavButtons'
-import MapDashboard from './MapDashboard'
+// Import base components instead of local ones
+import BaseMapDashboard from '../shared/BaseMapDashboard.vue'
+import BaseCatchmentTree from '../shared/BaseCatchmentTree.vue'
 import MaxHazard from './MaxHazard'
-import CatchmentTree from './CatchmentTree'
 import BoxChart from './BoxChart'
 import TimeseriesChart from './TimeseriesChart'
 import DurationChart from './DurationChart'
@@ -1196,17 +1218,21 @@ import NarativeBlock from './NarativeBlock'
 import { Fill, Stroke, Style } from 'ol/style'
 import { GridLoader } from 'vue-spinner/dist/vue-spinner.min.js'
 import $ from 'jquery'
-import path from 'path'
+import { remote } from '../../services/electron-compat'
 import stateStore from '../../store/state_handler'
+// Import the event bus composable for automatic cleanup
+import { useEventBus } from '../../composables/useEventBus'
 require('promise.prototype.finally').shim()
-const { dialog, app } = require('electron').remote
+const { dialog, app } = remote
 
 export default {
+  name: 'WQHealthDashboard',
+
   components: {
-    MapDashboard,
+    BaseMapDashboard,
+    BaseCatchmentTree,
     NavButtons,
     GridLoader,
-    CatchmentTree,
     BoxChart,
     TimeseriesChart,
     DurationChart,
@@ -1228,6 +1254,13 @@ export default {
     HealthNaratives,
     NarativeBlock,
   },
+
+  setup() {
+    // Use the event bus composable - listeners will be auto-cleaned on unmount
+    const { on, emit } = useEventBus()
+    return { busOn: on, busEmit: emit }
+  },
+
   data() {
     return {
       stationsApi:
@@ -1255,42 +1288,65 @@ export default {
       radius: '2px',
     }
   },
+  computed: {
+    mapDashboardRef() {
+      return this.$refs.mapDashboard
+    },
+    catchmentTreeRef() {
+      return this.$refs.catchmentTree
+    }
+  },
+
   beforeMount() {
     this.loadVariables()
     this.loadTypes()
   },
+
   mounted() {
-    let self = this
-    self.mapDashboardRef = self.$refs.mapDashboard
-    self.catchmentTreeRef = self.$refs.catchmentTree
+    const self = this
+
+    // Load selected WMAs and initialize map
     stateStore.getState(stateStore.keys.selectedWMAs, function (selectedWMAs) {
-      if (!selectedWMAs) {
-        return false
-      }
-      if (selectedWMAs.length === 0) {
+      if (!selectedWMAs || selectedWMAs.length === 0) {
         return false
       }
       self.selectedWMAs = selectedWMAs
       self.mapDashboardRef.showSelectedWMA(selectedWMAs)
     })
-    self.$bus.$on('stationSelectedFromMap', (station, isStationSelected) => {
-      self.catchmentTreeRef.toggleNode(station, isStationSelected)
+
+    // Register event bus listeners using composable (auto-cleanup on unmount)
+    // Note: Station selection is now handled via component events, not global bus
+    this.busOn('addStationsToStore', (payload) => {
+      if (payload && payload.stations) {
+        self.addStationsToStore(payload.stations, payload.chartStoredId)
+      }
     })
-    self.$bus.$on('refreshStations', () => {
-      self.fetchStations()
-    })
-    self.$bus.$on('addStationsToStore', (stations, chartStoredId) => {
-      self.addStationsToStore(stations, chartStoredId)
-    })
-    let map = this.$refs.mapDashboard.map
-    self.addKnpLayer(map)
+
+    // Add KNP layer to map
+    const map = this.$refs.mapDashboard.getMap()
+    if (map) {
+      self.addKnpLayer(map)
+    }
+
+    // Initialize range slider
     $('#customRange3').on('input', function () {
-      let v = $('#customRange3').val()
-      //console.log(v);
+      const v = $('#customRange3').val()
       $('div.minSamples').text(v)
     })
   },
   methods: {
+    // Handle station selection from map - called via component event
+    onStationSelectedFromMap({ station, feature }) {
+      console.log('WQHealth station selected from map:', station)
+      this.catchmentTreeRef.toggleNode(station, true)
+    },
+
+    // Handle station deselection from map - called via component event
+    onStationDeselectedFromMap({ station, feature }) {
+      console.log('WQHealth station deselected from map:', station)
+      this.catchmentTreeRef.toggleNode(station, false)
+    },
+
     doAnalysis() {
       console.log(this.selectedVariable)
       this.variableSample = this.selectedVariable
@@ -1476,7 +1532,8 @@ export default {
       this.loading = false
     },
     detectType() {
-      this.catchmentTreeRef.refreshStations()
+      // Set tree to loading state and fetch new stations
+      this.catchmentTreeRef.setLoading(true)
       console.log(this.selectedType)
       this.fetchStations()
     },
@@ -1499,8 +1556,9 @@ export default {
     changeVariable() {
       console.log(this.selectedVariable)
       this.variableSample = this.selectedVariable[0]
-      this.catchmentTreeRef.refreshStations()
-      //this.fetchStations();
+      // Set tree to loading state and fetch new stations
+      this.catchmentTreeRef.setLoading(true)
+      this.fetchStations()
     },
     loadRiskTable(urk_paramters) {
       this.$refs.siteComponent.showRiskTable(urk_paramters)
@@ -1511,7 +1569,7 @@ export default {
     showRiskHazard() {
       this.$refs.narativeComponent.showNarativeTable()
     },
-    fetchStations() {
+    async fetchStations() {
       let self = this
       let wmaNames = Object.assign([], self.selectedWMAs)
       // Cancel previous request if any
@@ -1528,30 +1586,63 @@ export default {
         this.selectedType
       }&list=${this.stationsList}&variable=${this.variableSample}`
       console.log(url)
-      //console.log(stationFile);
+
+      // Hash function for URL caching
+      const hashCode = (str) => str.split('').reduce((a, b) => { a = ((a << 5) - a) + b.charCodeAt(0); return a & a }, 0)
+
+      // Try to use cached data via electronAPI
+      let cachedData = null
+      if (window.electronAPI) {
+        try {
+          const userDataPath = await window.electronAPI.getUserDataPath()
+          const dir = userDataPath + '/stations'
+          const dirExists = await window.electronAPI.fileExists(dir)
+          if (!dirExists) {
+            await window.electronAPI.createDirectory(dir)
+          }
+          const stationFile = dir + '/' + hashCode(url) + '.json'
+          const fileExists = await window.electronAPI.fileExists(stationFile)
+          if (fileExists) {
+            const content = await window.electronAPI.readFile(stationFile)
+            cachedData = JSON.parse(content)
+          }
+        } catch (e) {
+          console.log('Cache read error:', e)
+        }
+      }
+
       // Check if online
       let cancelToken = null
       if (self.stationsRequest) {
         cancelToken = self.stationsRequest.token
       }
+
+      if (cachedData) {
+        self.mapDashboardRef.loadStationsToMap(cachedData)
+        self.createCatchmentTree(cachedData)
+      }
+
       axios
         .get(url, { cancelToken: cancelToken })
-        .then((response) => {
+        .then(async (response) => {
           self.mapDashboardRef.loadStationsToMap(response.data)
           self.createCatchmentTree(response.data)
+          // Cache the response via electronAPI
+          if (window.electronAPI) {
+            try {
+              const userDataPath = await window.electronAPI.getUserDataPath()
+              const dir = userDataPath + '/stations'
+              const stationFile = dir + '/' + hashCode(url) + '.json'
+              await window.electronAPI.writeFile(stationFile, JSON.stringify(response.data))
+            } catch (e) {
+              console.log('Cache write error:', e)
+            }
+          }
         })
         .catch((error) => {
           console.log(error)
         })
-      self.$bus.$on('stationSelectedFromMap', (station, isStationSelected) => {
-        self.catchmentTreeRef.toggleNode(station, isStationSelected)
-      })
-      self.$bus.$on('refreshStations', () => {
-        self.fetchStations()
-      })
-      self.$bus.$on('addStationsToStore', (stations, chartStoredId) => {
-        self.addStationsToStore(stations, chartStoredId)
-      })
+      // Initialize date pickers
       stateStore.getState(stateStore.keys.dateEnd, function (dateEnd) {
         if (!dateEnd) {
           var endDate = new Date()
@@ -1693,13 +1784,16 @@ export default {
       }
       //console.log(catchmentsData);
       let treeData = self.generateTreeData(catchmentsData)
+      // Pass callbacks in the format expected by createTree (raw event, data)
       this.catchmentTreeRef.createTree(
         treeData,
-        this.onCatchmentTreeSelectedHandler,
-        this.onTreeReady
+        this._onCatchmentTreeSelectedCallback,
+        this._onTreeReadyCallback
       )
     },
-    onTreeReady(event, data) {
+
+    // Raw callbacks for createTree (receive event, data directly)
+    _onTreeReadyCallback(event, data) {
       const self = this
       stateStore.getState(
         stateStore.keys.selectedHealthSites,
@@ -1710,6 +1804,20 @@ export default {
           self.catchmentTreeRef.toggleMultipleNodes(selectedHealthSites, true)
         }
       )
+    },
+
+    _onCatchmentTreeSelectedCallback(event, data) {
+      this._handleTreeSelection(event, data)
+    },
+
+    // Handle tree ready event from component event (receives { event, data })
+    onTreeReady({ event, data }) {
+      this._onTreeReadyCallback(event, data)
+    },
+
+    // Handle tree clicked event from component event (receives { event, data })
+    onCatchmentTreeSelectedHandler({ event, data }) {
+      this._handleTreeSelection(event, data)
     },
     generateTreeData(dictionary) {
       let treeData = []
@@ -1731,30 +1839,33 @@ export default {
       })
       return treeData
     },
-    onCatchmentTreeSelectedHandler(event, data) {
+
+    // Internal handler for tree selection (used by both callback and event)
+    _handleTreeSelection(event, data) {
       // On catchment tree clicked
-      let i = []
       let selected = ''
-      let selectedHealthSites = []
-      let _selectedStations = []
+      const selectedHealthSites = []
+      const _selectedStations = []
       let selectedBits = []
-      let _unselectedStations = Object.assign([], this.selectedStations)
-      //console.log(_unselectedStations);
-      for (i = 0; i < data.selected.length; i++) {
+      const _unselectedStations = Object.assign([], this.selectedStations)
+
+      for (let i = 0; i < data.selected.length; i++) {
         selected = data.instance.get_node(data.selected[i]).text
         selectedBits = selected.split(':')
-        let type = data.instance.get_node(data.selected[i]).type
+        const type = data.instance.get_node(data.selected[i]).type
         if (type === 'layer') {
           selectedHealthSites.push(selectedBits[0])
         } else if (type === 'station') {
           _selectedStations.push(selectedBits[0])
-          if (_unselectedStations.indexOf(selectedBits[0]) !== -1)
+          if (_unselectedStations.indexOf(selectedBits[0]) !== -1) {
             _unselectedStations.splice(
               _unselectedStations.indexOf(selectedBits[0]),
               1
             )
+          }
         }
       }
+
       this.mapDashboardRef.toggleSelectedStationsByStationNames(
         _selectedStations,
         _unselectedStations

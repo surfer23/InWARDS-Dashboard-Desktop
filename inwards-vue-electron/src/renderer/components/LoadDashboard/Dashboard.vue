@@ -29,7 +29,7 @@
                 :style="{ width: catchmentTreeWidth + 'px' }"
                 @mousedown="startDragging"
               >
-                <StationTree ref="stationTree" />
+                <StationTree ref="stationTree" @refresh-requested="fetchStations" />
                 <div class="legend">
                   <p style="font-size: x-small"><strong>Tree Legend</strong></p>
 
@@ -1100,7 +1100,7 @@ import CnCompliance from './CnCompliance'
 import StatusBar from '../StatusBar'
 import VectorLayer from 'ol/layer/Vector'
 import VectorSource from 'ol/source/Vector'
-import AllocatableLoad from './AllocatableLoad' 
+import AllocatableLoad from './AllocatableLoad'
 import GeoJSON from 'ol/format/GeoJSON'
 import { Fill, Stroke, Style } from 'ol/style'
 import { GridLoader } from 'vue-spinner/dist/vue-spinner.min.js'
@@ -1109,6 +1109,8 @@ import 'jquery-ui/ui/widgets/resizable.js' // Import the jQuery UI resizable com
 import 'jquery-ui/ui/widgets/draggable.js' // Import the jQuery UI draggable component
 import 'jquery-ui/themes/base/all.css' // Import the jQuery UI CSS styles
 import stateStore from '../../store/state_handler'
+// Import the event bus composable for automatic cleanup
+import { useEventBus } from '../../composables/useEventBus'
 require('promise.prototype.finally').shim()
 // Import bootstrap4-toggle CSS
 // Import jQuery and popper.js (required by bootstrap4-toggle)
@@ -1121,6 +1123,8 @@ import WmaJson from '../../assets/inkomati_usuthu_wma.json'
 const { dialog } = require('electron').remote
 
 export default {
+  name: 'LoadDashboard',
+
   components: {
     NavButtons,
     UserScenarios,
@@ -1139,6 +1143,13 @@ export default {
     CnCompliance,
     ArseCompliance,
   },
+
+  setup() {
+    // Use the event bus composable - listeners will be auto-cleaned on unmount
+    const { on, emit } = useEventBus()
+    return { busOn: on, busEmit: emit }
+  },
+
   data() {
     return {
       stationsApi:
@@ -1189,6 +1200,15 @@ export default {
       showUserScenarios: false
     }
   },
+  computed: {
+    mapDashboardRef() {
+      return this.$refs.mapDashboard
+    },
+    stationTreeRef() {
+      return this.$refs.stationTree
+    }
+  },
+
   created() {
     stateStore.getState(
       stateStore.keys.loginStatus, (status) => {
@@ -1202,8 +1222,6 @@ export default {
   },
   mounted() {
     let self = this
-    self.mapDashboardRef = self.$refs.mapDashboard
-    self.StationTreeRef = self.$refs.stationTree
     const catchmentTreeColumn = this.$refs.catchmentTreeColumn
     stateStore.clearSelectedLoadStations()
     // Initialize resizable functionality using jQuery UI Resizable
@@ -1225,31 +1243,35 @@ export default {
       stop: () => {
         $(catchmentTreeColumn).removeClass('dragging')
       },
-    }) 
+    })
     $('#upstreamModal').on('shown.bs.modal', () => {
       if (this.counterMap === false) {
         self.mapDashboardRef.initiateMap()
         let wmaNames = ['inkomati_usuthu']
-        self.mapDashboardRef.showSelectedWMA(wmaNames) 
-        self.$bus.$on( 
+        self.mapDashboardRef.showSelectedWMA(wmaNames)
+        // Use busOn for automatic cleanup on unmount
+        self.busOn(
           'stationSelectedFromMap',
-          (station, isStationSelected) => {
-            self.StationTreeRef.toggleNode(station, isStationSelected)
+          (payload) => {
+            // Mitt only passes one argument
+            const { station, selected } = payload
+            self.stationTreeRef.toggleNode(station, selected)
             console.log(station)
-            console.log(isStationSelected)
+            console.log(selected)
           }
         )
-        self.$bus.$on('refreshStations', () => {
-          self.fetchStations()
-        })
-        self.$bus.$on('addStationsToStore', (stations, chartStoredId) => {
+        self.busOn('addStationsToStore', (payload) => {
+          // Mitt only passes one argument
+          const { stations, chartStoredId } = payload
           self.addStationsToStore(stations, chartStoredId)
         })
         let map = this.$refs.mapDashboard.map
         self.addKnpLayer(map)
         //console.log(this.selectedVariable);
         this.variableSample = this.selectedVariable[0]
-        this.StationTreeRef.refreshStations()
+        // Set tree to loading state and fetch stations
+        this.stationTreeRef.setLoading(true)
+        this.fetchStations()
         this.counterMap = true
       }
       // Map initialization code here
@@ -1475,7 +1497,8 @@ export default {
       });
     },
     detectType() {
-      this.StationTreeRef.refreshStations()
+      // Set tree to loading state and fetch new stations
+      this.stationTreeRef.setLoading(true)
       //console.log(this.selectedType);
       this.fetchStations()
     },
@@ -1700,7 +1723,7 @@ export default {
       }
       //console.log(catchmentsData);
       let treeData = self.generateTreeStations(catchmentsData)
-      this.StationTreeRef.createStationTree(
+      this.stationTreeRef.createStationTree(
         treeData,
         this.onStationTreeSelectedHandler,
         this.onTreeReady
@@ -1715,7 +1738,7 @@ export default {
           if (!selectedLoadSites) {
             return false
           }
-          self.StationTreeRef.toggleMultipleNodes(selectedLoadSites, true)
+          self.stationTreeRef.toggleMultipleNodes(selectedLoadSites, true)
         }
       )
     },
@@ -1834,7 +1857,7 @@ export default {
 
     let self = this;
     self.mapDashboardRef = self.$refs.mapDashboard;
-    self.StationTreeRef = self.$refs.stationTree;
+    self.stationTreeRef = self.$refs.stationTree;
 
     // Get the latest selected node
     const latestSelectedNode = data.selected[data.selected.length - 1];
@@ -1896,7 +1919,7 @@ export default {
               function _handleSiteSelection(index, elementId) {
                   if (_selectedLoadStations[index]) {
                       _unselectedLoadStations.push(_selectedLoadStations[index])
-                      self.StationTreeRef.toggleNode(
+                      self.stationTreeRef.toggleNode(
                           _selectedLoadStations[index],
                           false
                       )

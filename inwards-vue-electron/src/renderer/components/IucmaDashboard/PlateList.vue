@@ -38,7 +38,7 @@
       }
     },
     created () {
-        this.$http.get('https://inwards.award.org.za/app_json/iucma_verification/plates_list.php')
+        this.$axios.get('https://inwards.award.org.za/app_json/iucma_verification/plates_list.php')
         .then(
           response => {
             this.options = response.data;
