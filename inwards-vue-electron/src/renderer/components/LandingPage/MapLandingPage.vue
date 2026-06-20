@@ -569,7 +569,7 @@ export default {
         })
     }
 
-    // Map hover
+    // Map hover — only highlight WMA polygon features, not stations
     map.on('pointermove', function (e) {
       if (
         highlightedFeature !== null &&
@@ -579,7 +579,7 @@ export default {
         highlightedFeature = null
       }
       map.forEachFeatureAtPixel(e.pixel, function (f) {
-        if (!self.selectedFeatures.hasOwnProperty(f.ol_uid)) {
+        if (f.get('wma') && !self.selectedFeatures.hasOwnProperty(f.ol_uid)) {
           highlightedFeature = f
           f.setStyle(highlightStyle)
           return true
@@ -981,15 +981,15 @@ export default {
   bottom: 0;
 }
 
-/* Fade edge into panel */
+/* Clean edge into panel */
 .map-section::after {
   content: '';
   position: absolute;
   top: 0;
   right: 0;
   bottom: 0;
-  width: 48px;
-  background: linear-gradient(to right, transparent, var(--ft-bg-surface));
+  width: 1px;
+  background: var(--ft-border);
   pointer-events: none;
   z-index: 5;
 }
